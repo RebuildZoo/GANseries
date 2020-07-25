@@ -1,1 +1,4 @@
 *.gz
+.vscode
+__pycache__
+/outputs
