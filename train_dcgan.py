@@ -35,8 +35,8 @@ class train_config(ut_cfg.config):
         localtime = time.localtime(time.time())
         self.path_save_mdid = "dcmnist" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
-        self.save_epoch_begin = 40
-        self.save_epoch_interval = 10
+        self.save_epoch_begin = 50
+        self.save_epoch_interval = 20
 
         self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "dcmnist_epoch_loss_log.txt"), 'a+')
         self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
@@ -45,7 +45,7 @@ class train_config(ut_cfg.config):
         self.width_in = 28
         self.latent_num = 16
 
-        self.method_init ="norm"  #"preTrain" #"kaming" #"xavier" # "norm"
+        self.method_init ="xavier"  #"preTrain" #"kaming" #"xavier" # "norm"
         self.training_epoch_amount = 150
         
 

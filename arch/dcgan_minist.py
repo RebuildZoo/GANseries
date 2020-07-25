@@ -47,14 +47,21 @@ def test_generator():
 
 class DiscrimConv2d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
-                 padding=0, bias = False):
+                 padding=0, bias = False, bn_flag = False):
         super(DiscrimConv2d, self).__init__()
+        # self.sn_conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride,padding, bias = bias)
         self.sn_conv = nn.utils.spectral_norm(
             nn.Conv2d(in_channels, out_channels, kernel_size, stride,padding, bias = bias)
-                )
+            )
+        #)
+        self.bn_flag = bn_flag
+        if bn_flag:
+            self.bn = nn.BatchNorm2d(out_channels)
 
     def forward(self, x):
         x = self.sn_conv(x)
+        if self.bn_flag:
+            x = self.bn(x)
         return F.leaky_relu(x, 0.2,inplace=True)
 
 class Discriminator(nn.Module):
@@ -68,7 +75,8 @@ class Discriminator(nn.Module):
         self.body = nn.Sequential(
             DiscrimConv2d(1, ndf*2, 4, 2, 1),
             DiscrimConv2d(ndf * 2, ndf * 4, 2, 2, 1),  
-            DiscrimConv2d(ndf * 4, ndf * 8, 4, 2, 1),  
+            DiscrimConv2d(ndf * 4, ndf * 8, 4, 2, 1), 
+            # nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False), 
             nn.utils.spectral_norm(nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)),
             nn.Sigmoid()
         )
