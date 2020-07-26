@@ -125,8 +125,8 @@ def test_discriminator():
 def teat_combine():
     x_Tsor = torch.rand(5, 74) # noise
 
-    gm_gnr = Generator()
-    gm_dcm = Discriminator_wQ()
+    gm_gnr = Generator(62, 10, 2)
+    gm_dcm = Discriminator_wQ(10, 2)
 
     j_Tsor, dsc_Tsor, ctn_Tsor = gm_dcm(gm_gnr(x_Tsor))
     print("output shape:", j_Tsor.shape) # [5, 1]
