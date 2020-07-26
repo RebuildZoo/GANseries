@@ -83,12 +83,11 @@ class Discriminator_wQ(nn.Module):
         )
 
         self.Q_classhead = nn.Sequential(
-            nn.utils.spectral_norm(nn.Conv2d(ndf * 8, n_classes, 4, 1, 0, bias=False)),
+            nn.utils.spectral_norm(nn.Conv2d(ndf * 8, n_classes, 4, 1, 0)),
             # nn.Linear(ndf * 8* 4 *4, n_classes), 
-            nn.Softmax() # n_classes
         )
         self.Q_codehead = nn.Sequential(
-            nn.utils.spectral_norm(nn.Conv2d(ndf * 8, code_dim, 4, 1, 0, bias=False)),
+            nn.utils.spectral_norm(nn.Conv2d(ndf * 8, code_dim, 4, 1, 0)),
             # nn.Linear(ndf * 8* 4 *4, code_dim)
         )
     
@@ -99,6 +98,7 @@ class Discriminator_wQ(nn.Module):
         qDjudge_Tsor = self.D_head(px_Tsor).view(BS, -1)
 
         qQdiscrete_Tsor = self.Q_classhead(px_Tsor).view(BS, -1)
+        qQdiscrete_Tsor = torch.softmax(qQdiscrete_Tsor, dim=-1) # shape(BS, 10), sum10=1
         qQcontinuous_Tsor = self.Q_codehead(px_Tsor).view(BS, -1)
 
         return qDjudge_Tsor, qQdiscrete_Tsor, qQcontinuous_Tsor

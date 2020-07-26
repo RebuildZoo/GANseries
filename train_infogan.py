@@ -31,25 +31,24 @@ class train_config(ut_cfg.config):
         super(train_config, self).__init__(pBs = 64, pWn = 2, p_force_cpu = False)
         self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "infogan"))
         localtime = time.localtime(time.time())
-        self.path_save_mdid = "infomnist_z10" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
+        self.path_save_mdid = "infomnist_z20" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
         self.save_epoch_begin = 50
         self.save_epoch_interval = 20
 
-        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z10_epoch_loss_log.txt"), 'a+')
+        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z20_epoch_loss_log.txt"), 'a+')
         self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
 
         self.height_in = 28
         self.width_in = 28
     
-        self.latent_dim = 10 # z dim
+        self.latent_dim = 20 # z dim
         self.class_num = 10 # class: one-hot discrete
         self.code_dim = 2  # continuous
 
-        self.method_init ="xavier"  #"preTrain" #"kaming" #"xavier" # "norm"
+        self.method_init ="norm"  #"preTrain" #"kaming" #"xavier" # "norm"
         self.training_epoch_amount = 150
         
-
         self.dtroot = os.path.join(ROOT, "datasets")
 
         self.opt_baseLr_D = 5e-4
@@ -160,8 +159,8 @@ class train_config(ut_cfg.config):
         view_x_Tsor1 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth1, nrow= w_layout)
         view_x_Tsor2 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth2, nrow= w_layout)
 
-        self.writer.add_image("infomnist_z10_ctndim0", view_x_Tsor1, p_epoch)
-        self.writer.add_image("infomnist_z10_ctndim1", view_x_Tsor2, p_epoch)
+        self.writer.add_image("infomnist_z20_ctndim0", view_x_Tsor1, p_epoch)
+        self.writer.add_image("infomnist_z20_ctndim1", view_x_Tsor2, p_epoch)
 
         # judge_Tsor_batch_i = pnetD(imgF_Tsor_bacth_i)
 
@@ -186,10 +185,8 @@ if __name__ == "__main__":
     gm_real_label = 1
     gm_real_confidence = 0.9
     gm_fake_label = 0
-
-    # Loss weights
-    gm_lambda_cat = 1
-    gm_lambda_con = 0.1
+    
+    gm_lambda_con = 0.1 # # Loss weights
 
     # prepare nets
     gm_netG = info_m.Generator(gm_cfg.latent_dim, gm_cfg.class_num, gm_cfg.code_dim)
@@ -213,7 +210,7 @@ if __name__ == "__main__":
     )
     gm_optimizerINFO = torch.optim.Adam(
         params = [{'params':gm_netG.parameters()}, {'params':gm_netD.parameters()}],
-        lr = gm_cfg.opt_baseLr_G,
+        lr = gm_cfg.opt_baseLr_G * 0.5,
         betas= (gm_cfg.opt_bata1, 0.99),
         # weight_decay = gm_cfg.opt_weightdecay
     )
@@ -262,9 +259,10 @@ if __name__ == "__main__":
         for epoch_i in range(gm_cfg.training_epoch_amount):
             start=time.time()
             # single epoch
-            for iter_idx, (img_Tsor_bacth_i, _) in enumerate(gm_trainloader):
+            for iter_idx, (img_Tsor_bacth_i, label_Tsor_bacth_i) in enumerate(gm_trainloader):
                 BS = img_Tsor_bacth_i.shape[0]
                 imgR_Tsor_bacth_i = img_Tsor_bacth_i.to(gm_cfg.device)
+                labelR_Tsor_bacth_i = label_Tsor_bacth_i.to(gm_cfg.device)
                 ############################
                 # (1) Update G network: maximize log(D(G(z)))
                 # k(update) = 1
@@ -273,7 +271,7 @@ if __name__ == "__main__":
                 gm_optimizerG.zero_grad()
 
                 noise_Tsor_bacth_i = gm_cfg.noise_generate_func(BS, gm_cfg.latent_dim) # (Bs, 62)
-                discrete_Tsor_bacth_i, randlabel_Tsor_bacth_i = gm_cfg.label_generate_func("random", BS) # (Bs,10)
+                discrete_Tsor_bacth_i, labelF_Tsor_bacth_i = gm_cfg.label_generate_func("random", BS) # (Bs,10)
                 continuous_Tsor_bacth_i = gm_cfg.noise_generate_func(BS, gm_cfg.code_dim) #(Bs, 2)
                 combined_Tsor_bacth_i = torch.cat([noise_Tsor_bacth_i, discrete_Tsor_bacth_i, continuous_Tsor_bacth_i],dim = -1)
                 
@@ -316,14 +314,18 @@ if __name__ == "__main__":
                 ###########################
                 gm_optimizerINFO.zero_grad()
 
-                # randlabel_Tsor_bacth_i
+                # labelF_Tsor_bacth_i
                 imgF_Tsor_bacth_i = gm_netG(combined_Tsor_bacth_i) # use the updated G; diff from line 257
 
-                _, predDiscrete_Tsor_bacth_i, predContinuous_code = gm_netD(imgF_Tsor_bacth_i) # use the updated D; diff from line 260/ 282
+                _, predDiscreteF_Tsor_bacth_i, predContinuousF_code = gm_netD(imgF_Tsor_bacth_i) # use the updated D; diff from line 260/ 282
 
-                lossINFO =  discrete_criterion(predDiscrete_Tsor_bacth_i, randlabel_Tsor_bacth_i) + \
-                    gm_lambda_con * continuous_criterion(predContinuous_code, continuous_Tsor_bacth_i)
+                _, predDiscreteR_Tsor_bacth_i, _ = gm_netD(imgR_Tsor_bacth_i) ### add novelly...
+
+                lossINFO =  discrete_criterion(predDiscreteF_Tsor_bacth_i, labelF_Tsor_bacth_i) + \
+                    discrete_criterion(predDiscreteR_Tsor_bacth_i, labelR_Tsor_bacth_i) + \
+                    2 * gm_lambda_con * continuous_criterion(predContinuousF_code, continuous_Tsor_bacth_i)
                 
+
                 lossINFO.backward()
 
                 lossINFO_an_epoch_Lst.append(lossINFO.item())
@@ -340,7 +342,7 @@ if __name__ == "__main__":
             gm_schedulerG.step(avgG_loss)
             gm_schedulerINFO.step(avgINFO_loss)
 
-            gm_cfg.log_in_board( "infomnist_z10 loss", 
+            gm_cfg.log_in_board( "infomnist_z20 loss", 
                 {"d_loss": avgD_loss, 
                 "g_loss": avgG_loss, 
                 "info_loss": avgINFO_loss, 
@@ -377,29 +379,6 @@ if __name__ == "__main__":
         print("Save the Inter.pth".center(60, "*"))
         torch.save(obj = gm_netD.state_dict(), f = gm_cfg.name_save_model("interrupt_netD"))
         torch.save(obj = gm_netG.state_dict(), f = gm_cfg.name_save_model("interrupt_netG"))
-
-
-
-
-
-
-
-
-
-
-
-                
-                
-
-
-
-
-    except KeyboardInterrupt:
-        print("Save the Inter.pth".center(60, "*"))
-        torch.save(obj = gm_netD.state_dict(), f = gm_cfg.name_save_model("interrupt_netD"))
-        torch.save(obj = gm_netG.state_dict(), f = gm_cfg.name_save_model("interrupt_netG"))
-
-
 
 
 

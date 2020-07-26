@@ -45,7 +45,7 @@ class train_config(ut_cfg.config):
         self.width_in = 28
         self.latent_num = 16
 
-        self.method_init ="xavier"  #"preTrain" #"kaming" #"xavier" # "norm"
+        self.method_init ="norm"  #"preTrain" #"kaming" #"xavier" # "norm"
         self.training_epoch_amount = 150
         
 
