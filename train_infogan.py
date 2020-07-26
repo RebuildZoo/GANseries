@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,8 +13,7 @@ import sys
 ROOT = os.getcwd()
 sys.path.append(ROOT)
 
-
-import arch.dcgan_minist as dc_m
+import arch.infogan_mnist as info_m
 import loaders.ministLoader as mnstld 
 import custom_utils.config as ut_cfg 
 import custom_utils.initializer as ut_init
@@ -31,19 +29,22 @@ tensorboard --logdir outputs --port 8890
 class train_config(ut_cfg.config):
     def __init__(self):
         super(train_config, self).__init__(pBs = 64, pWn = 2, p_force_cpu = False)
-        self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs"))
+        self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "infogan"))
         localtime = time.localtime(time.time())
-        self.path_save_mdid = "dcmnist" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
+        self.path_save_mdid = "infomnist_z10" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
         self.save_epoch_begin = 50
         self.save_epoch_interval = 20
 
-        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "dcmnist_epoch_loss_log.txt"), 'a+')
+        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z10_epoch_loss_log.txt"), 'a+')
         self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
 
         self.height_in = 28
         self.width_in = 28
-        self.latent_num = 16
+    
+        self.latent_dim = 10 # z dim
+        self.class_num = 10 # class: one-hot discrete
+        self.code_dim = 2  # continuous
 
         self.method_init ="xavier"  #"preTrain" #"kaming" #"xavier" # "norm"
         self.training_epoch_amount = 150
@@ -55,25 +56,40 @@ class train_config(ut_cfg.config):
         self.opt_baseLr_G = 2e-4
         self.opt_bata1 = 0.5
         self.opt_weightdecay = 3e-6
-        
-        
-        '''
-        DCGAN: 
-        suggested learning rate of 0.001, to be too high, using 0.0002 instead. 
-        the momentum term β1 at the suggested value of 0.9 resulted in training oscillation and instability while reducing it to 0.5 helped stabilize training.
-        '''
 
         # synchronize the rand seed
         self.rand_seed = 2673 # random.randint(1, 10000)
         print("Random Seed: ", self.rand_seed)
         random.seed(self.rand_seed)
         torch.manual_seed(self.rand_seed)
-        self.fixed_noise = self.noise_generate_func(self.ld_batchsize, self.latent_num)
+        
+        # design the vali instance 
+        fixed_z = self.noise_generate_func(self.class_num**2, self.latent_dim) # (100, 62)
+        fixed_discrete, _ = self.label_generate_func("fixed", self.class_num**2)
+        fixed_continuous_zero = torch.zeros(self.class_num**2, 1)
+        fixed_continuous_lsp = (torch.stack([torch.linspace(-1, 1, self.class_num) for _ in range(self.class_num)]).transpose(0,1)).reshape(-1,1)
+        fixed_continuous1 = torch.cat([fixed_continuous_lsp,fixed_continuous_zero],dim=-1).to(self.device)
+        fixed_continuous2 = torch.cat([fixed_continuous_zero, fixed_continuous_lsp],dim=-1).to(self.device)
+        
+        self.combined_noise1 = torch.cat([fixed_z, fixed_discrete, fixed_continuous1],dim = -1)
+        self.combined_noise2 = torch.cat([fixed_z, fixed_discrete, fixed_continuous2],dim = -1)
+
 
     def noise_generate_func(self, *size):
         # torch.randn N(0, 1) ; torch.rand U(0, 1)
-        # U(-1 ,1)
-        return torch.rand(*size).to(self.device)* 2 - 1 # to (-1, 1)
+        return torch.rand(*size).to(self.device)* 2 - 1 # to U(-1, 1)
+    
+    def label_generate_func(self, mode:str, batchsize:int):
+        figure_Tsor = None
+        if mode == "fixed":
+            figure_Tsor = torch.cat([torch.arange(self.class_num) for _ in range(self.class_num)]).view(-1,1) # (10*10, 1)
+        elif mode == "random":
+            figure_Tsor = torch.randint(self.class_num, (batchsize, 1)) # (Bs, 1)
+        assert figure_Tsor is not None, "invalid mode"
+        
+        onehot_Tensor = torch.zeros(figure_Tsor.shape[0], self.class_num).scatter_(dim= 1, index = figure_Tsor, value = 1.0).to(self.device) # (BS, 10)
+
+        return onehot_Tensor, figure_Tsor.view(-1).to(self.device)
 
     def init_net(self, pNet):
         if self.method_init == "xavier":
@@ -87,7 +103,7 @@ class train_config(ut_cfg.config):
             pNet.load_state_dict(torch.load(self.preTrain_model_path))
 
         pNet.to(self.device).train()
-
+    
     def create_dataset(self, istrain):
         if istrain:
             imgUbyte_absfilename = r"datasets\MNIST\train-images-idx3-ubyte.gz"
@@ -106,7 +122,7 @@ class train_config(ut_cfg.config):
         q_dataset = mnstld.minist_Loader(imgUbyte_absfilename, labelUbyte_absfilename, basic_transform)
 
         return q_dataset 
-
+    
     def name_save_model(self, save_mode, epochX = None):
         model_type = save_mode.split("_")[1] # netD / netG
         model_filename = self.path_save_mdid + model_type
@@ -137,22 +153,24 @@ class train_config(ut_cfg.config):
     def validate(self, pnetD, pnetG, p_epoch):
         
         # use the fixed noise to test the GAN performance
-        w_layout = 8
-        imgF_Tsor_bacth_i = pnetG(self.fixed_noise)
+        w_layout = self.class_num
+        imgF_Tsor_bacth1 = pnetG(self.combined_noise1)
+        imgF_Tsor_bacth2 = pnetG(self.combined_noise2)
         # imgF_Tsor_bacth_i = imgF_Tsor_bacth_i/2 + 0.5
-        view_x_Tsor = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth_i, nrow= w_layout)
+        view_x_Tsor1 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth1, nrow= w_layout)
+        view_x_Tsor2 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth2, nrow= w_layout)
 
-        self.writer.add_image("Generator Outputs", view_x_Tsor, p_epoch)
+        self.writer.add_image("infomnist_z10_ctndim0", view_x_Tsor1, p_epoch)
+        self.writer.add_image("infomnist_z10_ctndim1", view_x_Tsor2, p_epoch)
 
-        judge_Tsor_batch_i = pnetD(imgF_Tsor_bacth_i)
+        # judge_Tsor_batch_i = pnetD(imgF_Tsor_bacth_i)
 
-        judge_Arr = np.zeros(gm_cfg.ld_batchsize)
-        for idex, ele_i in enumerate(judge_Tsor_batch_i):
-            judge_Arr[idex] = round(ele_i.item(), 3)
-        print("[validate] epoch %d  D's judgement:\n"%(p_epoch), np.reshape(judge_Arr, (-1, w_layout)))
+        # judge_Arr = np.zeros(gm_cfg.ld_batchsize)
+        # for idex, ele_i in enumerate(judge_Tsor_batch_i):
+        #     judge_Arr[idex] = round(ele_i.item(), 3)
+        # print("[validate] epoch %d  D's judgement:\n"%(p_epoch), np.reshape(judge_Arr, (-1, w_layout)))
 
-        
-
+    
 if __name__ == "__main__":
 
     gm_cfg = train_config()
@@ -169,24 +187,33 @@ if __name__ == "__main__":
     gm_real_confidence = 0.9
     gm_fake_label = 0
 
+    # Loss weights
+    gm_lambda_cat = 1
+    gm_lambda_con = 0.1
+
     # prepare nets
-    gm_netG = dc_m.Generator(gm_cfg.latent_num)
-    gm_netD = dc_m.Discriminator()
+    gm_netG = info_m.Generator(gm_cfg.latent_dim, gm_cfg.class_num, gm_cfg.code_dim)
+    gm_netD = info_m.Discriminator_wQ(gm_cfg.class_num, gm_cfg.code_dim)
     
     gm_cfg.init_net(gm_netG)
     gm_cfg.init_net(gm_netD)
 
-    # optimizer & scheduler
+    # Optimizers
     gm_optimizerG = optim.Adam(
         params = gm_netG.parameters(),
         lr = gm_cfg.opt_baseLr_G,
         betas= (gm_cfg.opt_bata1, 0.99),
         # weight_decay = gm_cfg.opt_weightdecay
     )
-
     gm_optimizerD = optim.Adam(
         params = gm_netD.parameters(),
         lr = gm_cfg.opt_baseLr_D,
+        betas= (gm_cfg.opt_bata1, 0.99),
+        # weight_decay = gm_cfg.opt_weightdecay
+    )
+    gm_optimizerINFO = torch.optim.Adam(
+        params = [{'params':gm_netG.parameters()}, {'params':gm_netD.parameters()}],
+        lr = gm_cfg.opt_baseLr_G,
         betas= (gm_cfg.opt_bata1, 0.99),
         # weight_decay = gm_cfg.opt_weightdecay
     )
@@ -207,10 +234,23 @@ if __name__ == "__main__":
         cooldown=0, min_lr=0, eps=1e-08
     )
 
-    gm_criterion = nn.BCELoss()
+    gm_schedulerINFO = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer = gm_optimizerINFO,
+        mode='min',
+        factor=0.8, patience=5, verbose=True, 
+        threshold=0.0001, threshold_mode='rel', 
+        cooldown=0, min_lr=0, eps=1e-08
+    )
 
+    # Loss functions
+    adversarial_criterion = torch.nn.BCELoss()
+    discrete_criterion = torch.nn.CrossEntropyLoss()
+    continuous_criterion = torch.nn.MSELoss()
+    gm_criterion = [adversarial_criterion, discrete_criterion, continuous_criterion]
     lossD_an_epoch_Lst = []
     lossG_an_epoch_Lst = []
+    lossINFO_an_epoch_Lst = []
+
     try:
         print("Train_Begin".center(40, "*"))
         print("Generator:", end="")
@@ -222,90 +262,101 @@ if __name__ == "__main__":
         for epoch_i in range(gm_cfg.training_epoch_amount):
             start=time.time()
             # single epoch
-            for iter_idx, (img_Tsor_bacth_i, _ ) in enumerate(gm_trainloader):
-                ############################
-                # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
-                # k(update) = 2; 1 turn for real, another for fake
-                # min D(imgR) ~ 1 && D(G(z)) ~ 0
-                ###########################
+            for iter_idx, (img_Tsor_bacth_i, _) in enumerate(gm_trainloader):
                 BS = img_Tsor_bacth_i.shape[0]
-                gm_optimizerD.zero_grad()
-
-                # train D with real
                 imgR_Tsor_bacth_i = img_Tsor_bacth_i.to(gm_cfg.device)
-                gt_Tsor_bacth_i = torch.full((BS, 1), gm_real_label*gm_real_confidence, device = gm_cfg.device)
-
-                predR_Tsor_bacth_i = gm_netD(imgR_Tsor_bacth_i)
-
-                lossD_R = gm_criterion(predR_Tsor_bacth_i, gt_Tsor_bacth_i)
-
-                lossD_R.backward()
-
-                # train D with fake
-                noise_Tsor_bacth_i = gm_cfg.noise_generate_func(BS, gm_cfg.latent_num)
-                imgF_Tsor_bacth_i = gm_netG(noise_Tsor_bacth_i)
-                gt_Tsor_bacth_i.fill_(gm_fake_label) # reuse the space
-
-                predF_Tsor_bacth_i = gm_netD(imgF_Tsor_bacth_i.detach())
-
-                lossD_F = gm_criterion(predF_Tsor_bacth_i, gt_Tsor_bacth_i)
-
-                lossD_F.backward()
-
-                lossD = lossD_R + lossD_F
-                # for the gt_Tsor_bacth_i has been modified in-place,
-                # cannot use lossD to backward; 
-                
-                lossD_an_epoch_Lst.append(lossD.item())
-
-                gm_optimizerD.step() ### upgrade the D.para()
-
                 ############################
-                # (2) Update G network: maximize log(D(G(z)))
+                # (1) Update G network: maximize log(D(G(z)))
                 # k(update) = 1
                 # min  D(G(z)) ~ 1
                 ###########################
                 gm_optimizerG.zero_grad()
-                gt_Tsor_bacth_i.fill_(gm_real_label) # reuse the space
 
-                # current fake generated by G: imgF_Tsor_bacth_i
+                noise_Tsor_bacth_i = gm_cfg.noise_generate_func(BS, gm_cfg.latent_dim) # (Bs, 62)
+                discrete_Tsor_bacth_i, randlabel_Tsor_bacth_i = gm_cfg.label_generate_func("random", BS) # (Bs,10)
+                continuous_Tsor_bacth_i = gm_cfg.noise_generate_func(BS, gm_cfg.code_dim) #(Bs, 2)
+                combined_Tsor_bacth_i = torch.cat([noise_Tsor_bacth_i, discrete_Tsor_bacth_i, continuous_Tsor_bacth_i],dim = -1)
+                
+                imgF_Tsor_bacth_i = gm_netG(combined_Tsor_bacth_i)
 
-                # use the updated D to judge the imgF
-                judge_Tsor_bacth_i = gm_netD(imgF_Tsor_bacth_i) # D has updated, diff from line252.
+                gt_Tsor_bacth_i = torch.full((BS, 1), gm_real_label, device = gm_cfg.device)
+                judge_Tsor_bacth_i, _, _ = gm_netD(imgF_Tsor_bacth_i)
 
-                # the request for G:
-                # produce D'judge as close as '1'.
+                lossG = adversarial_criterion(judge_Tsor_bacth_i, gt_Tsor_bacth_i)
 
-                lossG = gm_criterion(judge_Tsor_bacth_i, gt_Tsor_bacth_i)
-
-                lossG.backward()                
+                lossG.backward() 
                 lossG_an_epoch_Lst.append(lossG.item())
 
                 gm_optimizerG.step()
+
+                ############################
+                # (2) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+                # k(update) = 2; 1 turn for real, another for fake
+                # min D(imgR) ~ 1 && D(G(z)) ~ 0
+                ###########################
+                gm_optimizerD.zero_grad()
+                # train D with real
+                gt_Tsor_bacth_i.fill_(gm_real_label*gm_real_confidence) # reuse the space
+                predR_Tsor_bacth_i, _, _ = gm_netD(imgR_Tsor_bacth_i)
+                lossD_R = adversarial_criterion(predR_Tsor_bacth_i, gt_Tsor_bacth_i)
+                lossD_R.backward()
+                # train D with fake
+                gt_Tsor_bacth_i.fill_(gm_fake_label) # reuse the space
+                predF_Tsor_bacth_i, _, _ = gm_netD(imgF_Tsor_bacth_i.detach())
+                lossD_F = adversarial_criterion(predF_Tsor_bacth_i, gt_Tsor_bacth_i)
+                lossD_F.backward()
+
+                lossD = lossD_R + lossD_F
+                lossD_an_epoch_Lst.append(lossD.item())
+
+                gm_optimizerD.step()
+
+                ############################
+                # (3) Information Loss
+                ###########################
+                gm_optimizerINFO.zero_grad()
+
+                # randlabel_Tsor_bacth_i
+                imgF_Tsor_bacth_i = gm_netG(combined_Tsor_bacth_i) # use the updated G; diff from line 257
+
+                _, predDiscrete_Tsor_bacth_i, predContinuous_code = gm_netD(imgF_Tsor_bacth_i) # use the updated D; diff from line 260/ 282
+
+                lossINFO =  discrete_criterion(predDiscrete_Tsor_bacth_i, randlabel_Tsor_bacth_i) + \
+                    gm_lambda_con * continuous_criterion(predContinuous_code, continuous_Tsor_bacth_i)
+                
+                lossINFO.backward()
+
+                lossINFO_an_epoch_Lst.append(lossINFO.item())
+
+                gm_optimizerINFO.step()
             
             # end an epoch
             delta_t = (time.time()- start)/60
             avgD_loss = sum(lossD_an_epoch_Lst)/len(lossD_an_epoch_Lst)
             avgG_loss = sum(lossG_an_epoch_Lst)/len(lossG_an_epoch_Lst)
+            avgINFO_loss = sum(lossINFO_an_epoch_Lst)/len(lossINFO_an_epoch_Lst)
 
             gm_schedulerD.step(avgD_loss)
             gm_schedulerG.step(avgG_loss)
+            gm_schedulerINFO.step(avgINFO_loss)
 
-            gm_cfg.log_in_board( "dcmnist loss", 
+            gm_cfg.log_in_board( "infomnist_z10 loss", 
                 {"d_loss": avgD_loss, 
                 "g_loss": avgG_loss, 
+                "info_loss": avgINFO_loss, 
                 },  epoch_i
             )
 
-            gm_cfg.log_in_file("epoch = %03d, time_cost(min)= %2.2f, dcGAN_d_loss = %2.5f, dcGAN_g_loss = %2.5f"
-                %(epoch_i, delta_t, avgD_loss, avgG_loss)
+            gm_cfg.log_in_file("epoch = %03d, time_cost(min)= %2.2f, d_loss = %2.5f, g_loss = %2.5f,info_loss = %2.5f"
+                %(epoch_i, delta_t, avgD_loss, avgG_loss, avgINFO_loss)
             )
-            
+
             # validate the accuracy
             gm_cfg.validate(gm_netD, gm_netG, epoch_i)
 
             lossD_an_epoch_Lst.clear()
             lossG_an_epoch_Lst.clear()
+            lossINFO_an_epoch_Lst.clear()
 
             if (epoch_i >gm_cfg.save_epoch_begin and epoch_i %gm_cfg.save_epoch_interval == 1):
                 # save weight at regular interval
@@ -337,6 +388,16 @@ if __name__ == "__main__":
 
 
 
+                
+                
+
+
+
+
+    except KeyboardInterrupt:
+        print("Save the Inter.pth".center(60, "*"))
+        torch.save(obj = gm_netD.state_dict(), f = gm_cfg.name_save_model("interrupt_netD"))
+        torch.save(obj = gm_netG.state_dict(), f = gm_cfg.name_save_model("interrupt_netG"))
 
 
 
@@ -345,9 +406,3 @@ if __name__ == "__main__":
 
 
 
-
-
-
-
-
-    

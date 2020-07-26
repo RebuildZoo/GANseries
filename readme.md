@@ -9,12 +9,13 @@ Pioneering work in GAN:
 | **DCGAN** | arXiv2015 (5807) | first fully conv | 
 | WGAN-GP   | NIPS2017 (2601) | Wasserstein Loss; The improvement of fully connected structure and wgan |
 | LSGAN     | Procced2017 (1187) | Loss MSE, fully conv |
-| **InfoGAN**   | NIPS2017 (2006) | Interpretable, fully conv|
+| **InfoGAN**   | NIPS2017 (2006) | Interpretable & Disentangled rep., fully conv|
 | BEGAN     | arXiv2017 ( 649) |add AE arch fully conv |
 
 
 
 ## 01. DC-GAN for MNIST
+
 This is the first GAN using transposed convolution as **G** and convolution as **D**. 
 
 ![image](illus/dcgan_mnist.png)
@@ -52,4 +53,5 @@ Here are a few side notes:
 - Well-converged loss may also get terrible results - sometimes the generator finds one/few examples that discriminator can't distinguish from the genuine data. The trouble is it always gives out these few, not creating anything new, this is called mode **collapse**. Usually introducing some diversity to your data helps.
 (From [stackoverflow](https://stackoverflow.com/questions/42690721/how-to-interpret-the-discriminators-loss-and-the-generators-loss-in-generative))
 
-
+## 02. InfoGAN for MNIST
+InfoGAN is a type of generative adversarial network that modifies the GAN objective to encourage it to learn interpretable and meaningful representations. This is done by maximizing the mutual information between a fixed small subset of the GAN’s noise variables and the observations.
