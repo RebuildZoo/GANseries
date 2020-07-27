@@ -26,26 +26,47 @@ except ImportError:
 tensorboard --logdir outputs --port 8890
 '''
 
+class NormalNLLLoss(nn.Module):
+    """
+    https://github.com/Natsu6767/InfoGAN-PyTorch/blob/master/utils.py
+    Calculate the negative log likelihood
+    of normal distribution.
+    This needs to be minimised.
+    Treating Q(cj | x) as a factored Gaussian.
+    """
+    def __init__(self, size_average=None, reduce=None, reduction="mean"):
+        super(NormalNLLLoss, self).__init__()
+        self.reduction = reduction
+    def __str__(self):
+        return "customed NormalNLLLoss"
+    def forward(self, x, mu, var):
+        logli = -0.5 * torch.log(2 * np.pi* var + 1e-6) - (x - mu)**2 / (2*var +  1e-6)
+        if self.reduction == "mean":
+            nll = - logli.sum(1).mean()
+        return nll
+    
+
+
 class train_config(ut_cfg.config):
     def __init__(self):
         super(train_config, self).__init__(pBs = 64, pWn = 2, p_force_cpu = False)
         self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "infogan"))
         localtime = time.localtime(time.time())
-        self.path_save_mdid = "infomnist_z10" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
+        self.path_save_mdid = "infomnist_z20NLL" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
         self.save_epoch_begin = 50
         self.save_epoch_interval = 20
 
-        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z10_epoch_loss_log.txt"), 'a+')
+        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z20NLL_epoch_loss_log.txt"), 'a+')
         self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
 
         self.height_in = 28
         self.width_in = 28
     
-        self.latent_dim = 10 # z dim
+        self.latent_dim = 20 # z dim
         self.class_num = 10 # class: one-hot discrete
         self.code_dim = 2  # continuous
-
+        self.test_edge = 2.0
         self.method_init ="norm"  #"preTrain" #"kaming" #"xavier" # "norm"
         self.training_epoch_amount = 150
         
@@ -66,7 +87,7 @@ class train_config(ut_cfg.config):
         fixed_z = self.noise_generate_func(self.class_num**2, self.latent_dim) # (100, 62)
         fixed_discrete, _ = self.label_generate_func("fixed", self.class_num**2)
         fixed_continuous_zero = torch.zeros(self.class_num**2, 1)
-        fixed_continuous_lsp = (torch.stack([torch.linspace(-1, 1, self.class_num) for _ in range(self.class_num)]).transpose(0,1)).reshape(-1,1)
+        fixed_continuous_lsp = (torch.stack([torch.linspace(-self.test_edge, self.test_edge, self.class_num) for _ in range(self.class_num)]).transpose(0,1)).reshape(-1,1)
         fixed_continuous1 = torch.cat([fixed_continuous_lsp,fixed_continuous_zero],dim=-1).to(self.device)
         fixed_continuous2 = torch.cat([fixed_continuous_zero, fixed_continuous_lsp],dim=-1).to(self.device)
         
@@ -155,14 +176,14 @@ class train_config(ut_cfg.config):
         w_layout = self.class_num
         imgF_Tsor_bacth1 = pnetG(self.combined_noise1)
         imgF_Tsor_bacth2 = pnetG(self.combined_noise2)
-        # imgF_Tsor_bacth_i = imgF_Tsor_bacth_i/2 + 0.5
+        # imgF_batch_i = imgF_batch_i/2 + 0.5
         view_x_Tsor1 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth1, nrow= w_layout)
         view_x_Tsor2 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth2, nrow= w_layout)
 
-        self.writer.add_image("infomnist_z10_ctndim0", view_x_Tsor1, p_epoch)
-        self.writer.add_image("infomnist_z10_ctndim1", view_x_Tsor2, p_epoch)
+        self.writer.add_image("infomnist_z20NLL_ctndim0", view_x_Tsor1, p_epoch)
+        self.writer.add_image("infomnist_z20NLL_ctndim1", view_x_Tsor2, p_epoch)
 
-        # judge_Tsor_batch_i = pnetD(imgF_Tsor_bacth_i)
+        # judge_Tsor_batch_i = pnetD(imgF_batch_i)
 
         # judge_Arr = np.zeros(gm_cfg.ld_batchsize)
         # for idex, ele_i in enumerate(judge_Tsor_batch_i):
@@ -208,14 +229,14 @@ if __name__ == "__main__":
         betas= (gm_cfg.opt_bata1, 0.99),
         # weight_decay = gm_cfg.opt_weightdecay
     )
-    gm_optimizerINFO = torch.optim.Adam(
+    gm_optimizerINFO = optim.Adam(
         params = [{'params':gm_netG.parameters()}, {'params':gm_netD.parameters()}],
         lr = gm_cfg.opt_baseLr_G * 0.5,
         betas= (gm_cfg.opt_bata1, 0.99),
         # weight_decay = gm_cfg.opt_weightdecay
     )
 
-    gm_schedulerG = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    gm_schedulerG = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer = gm_optimizerG,
         mode='min',
         factor=0.8, patience=5, verbose=True, 
@@ -223,7 +244,7 @@ if __name__ == "__main__":
         cooldown=0, min_lr=0, eps=1e-08
     )
 
-    gm_schedulerD = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    gm_schedulerD = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer = gm_optimizerD,
         mode='min',
         factor=0.8, patience=5, verbose=True, 
@@ -231,7 +252,7 @@ if __name__ == "__main__":
         cooldown=0, min_lr=0, eps=1e-08
     )
 
-    gm_schedulerINFO = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    gm_schedulerINFO = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer = gm_optimizerINFO,
         mode='min',
         factor=0.8, patience=5, verbose=True, 
@@ -240,9 +261,10 @@ if __name__ == "__main__":
     )
 
     # Loss functions
-    adversarial_criterion = torch.nn.BCELoss()
-    discrete_criterion = torch.nn.CrossEntropyLoss()
-    continuous_criterion = torch.nn.MSELoss()
+    adversarial_criterion = nn.BCELoss()
+    discrete_criterion = nn.CrossEntropyLoss()
+    continuous_criterion = NormalNLLLoss() #nn.MSELoss()
+    nn.NLLLoss()
     gm_criterion = [adversarial_criterion, discrete_criterion, continuous_criterion]
     lossD_an_epoch_Lst = []
     lossG_an_epoch_Lst = []
@@ -259,10 +281,10 @@ if __name__ == "__main__":
         for epoch_i in range(gm_cfg.training_epoch_amount):
             start=time.time()
             # single epoch
-            for iter_idx, (img_Tsor_bacth_i, label_Tsor_bacth_i) in enumerate(gm_trainloader):
-                BS = img_Tsor_bacth_i.shape[0]
-                imgR_Tsor_bacth_i = img_Tsor_bacth_i.to(gm_cfg.device)
-                labelR_Tsor_bacth_i = label_Tsor_bacth_i.to(gm_cfg.device)
+            for iter_idx, (img_batch_i, label_batch_i) in enumerate(gm_trainloader):
+                BS = img_batch_i.shape[0]
+                imgR_batch_i = img_batch_i.to(gm_cfg.device)
+                labelR_batch_i = label_batch_i.to(gm_cfg.device)
                 ############################
                 # (1) Update G network: maximize log(D(G(z)))
                 # k(update) = 1
@@ -270,17 +292,17 @@ if __name__ == "__main__":
                 ###########################
                 gm_optimizerG.zero_grad()
 
-                noise_Tsor_bacth_i = gm_cfg.noise_generate_func(BS, gm_cfg.latent_dim) # (Bs, 62)
-                discrete_Tsor_bacth_i, labelF_Tsor_bacth_i = gm_cfg.label_generate_func("random", BS) # (Bs,10)
-                continuous_Tsor_bacth_i = gm_cfg.noise_generate_func(BS, gm_cfg.code_dim) #(Bs, 2)
-                combined_Tsor_bacth_i = torch.cat([noise_Tsor_bacth_i, discrete_Tsor_bacth_i, continuous_Tsor_bacth_i],dim = -1)
+                noise_batch_i = gm_cfg.noise_generate_func(BS, gm_cfg.latent_dim) # (Bs, 62)
+                discrete_batch_i, labelF_batch_i = gm_cfg.label_generate_func("random", BS) # (Bs,10)
+                continuous_batch_i = gm_cfg.noise_generate_func(BS, gm_cfg.code_dim) #(Bs, 2)
+                combined_batch_i = torch.cat([noise_batch_i, discrete_batch_i, continuous_batch_i],dim = -1)
                 
-                imgF_Tsor_bacth_i = gm_netG(combined_Tsor_bacth_i)
+                imgF_batch_i = gm_netG(combined_batch_i)
 
-                gt_Tsor_bacth_i = torch.full((BS, 1), gm_real_label, device = gm_cfg.device)
-                judge_Tsor_bacth_i, _, _ = gm_netD(imgF_Tsor_bacth_i)
+                gt_batch_i = torch.full((BS, 1), gm_real_label, device = gm_cfg.device)
+                judge_batch_i, _, _, _ = gm_netD(imgF_batch_i)
 
-                lossG = adversarial_criterion(judge_Tsor_bacth_i, gt_Tsor_bacth_i)
+                lossG = adversarial_criterion(judge_batch_i, gt_batch_i)
 
                 lossG.backward() 
                 lossG_an_epoch_Lst.append(lossG.item())
@@ -294,14 +316,14 @@ if __name__ == "__main__":
                 ###########################
                 gm_optimizerD.zero_grad()
                 # train D with real
-                gt_Tsor_bacth_i.fill_(gm_real_label*gm_real_confidence) # reuse the space
-                predR_Tsor_bacth_i, _, _ = gm_netD(imgR_Tsor_bacth_i)
-                lossD_R = adversarial_criterion(predR_Tsor_bacth_i, gt_Tsor_bacth_i)
+                gt_batch_i.fill_(gm_real_label*gm_real_confidence) # reuse the space
+                predR_batch_i, _, _, _ = gm_netD(imgR_batch_i)
+                lossD_R = adversarial_criterion(predR_batch_i, gt_batch_i)
                 lossD_R.backward()
                 # train D with fake
-                gt_Tsor_bacth_i.fill_(gm_fake_label) # reuse the space
-                predF_Tsor_bacth_i, _, _ = gm_netD(imgF_Tsor_bacth_i.detach())
-                lossD_F = adversarial_criterion(predF_Tsor_bacth_i, gt_Tsor_bacth_i)
+                gt_batch_i.fill_(gm_fake_label) # reuse the space
+                predF_batch_i, _, _, _ = gm_netD(imgF_batch_i.detach())
+                lossD_F = adversarial_criterion(predF_batch_i, gt_batch_i)
                 lossD_F.backward()
 
                 lossD = lossD_R + lossD_F
@@ -314,16 +336,16 @@ if __name__ == "__main__":
                 ###########################
                 gm_optimizerINFO.zero_grad()
 
-                # labelF_Tsor_bacth_i
-                imgF_Tsor_bacth_i = gm_netG(combined_Tsor_bacth_i) # use the updated G; diff from line 257
+                # labelF_batch_i
+                imgF_batch_i = gm_netG(combined_batch_i) # use the updated G; diff from line 257
 
-                _, predDiscreteF_Tsor_bacth_i, predContinuousF_code = gm_netD(imgF_Tsor_bacth_i) # use the updated D; diff from line 260/ 282
+                _, predDsctF_batch_i, predCtnFmu_batch_i, predCtnFexpvar_batch_i = gm_netD(imgF_batch_i) # use the updated D; diff from line 260/ 282
 
-                _, predDiscreteR_Tsor_bacth_i, _ = gm_netD(imgR_Tsor_bacth_i) ### add novelly...
+                _, predDsctR_batch_i, _, _ = gm_netD(imgR_batch_i) ### add novelly...
 
-                lossINFO =  discrete_criterion(predDiscreteF_Tsor_bacth_i, labelF_Tsor_bacth_i) + \
-                    discrete_criterion(predDiscreteR_Tsor_bacth_i, labelR_Tsor_bacth_i) + \
-                    2 * gm_lambda_con * continuous_criterion(predContinuousF_code, continuous_Tsor_bacth_i)
+                lossINFO =  discrete_criterion(predDsctF_batch_i, labelF_batch_i) + \
+                    discrete_criterion(predDsctR_batch_i, labelR_batch_i) + \
+                    2 * gm_lambda_con * continuous_criterion(continuous_batch_i, predCtnFmu_batch_i, predCtnFexpvar_batch_i)
                 
 
                 lossINFO.backward()
@@ -342,7 +364,7 @@ if __name__ == "__main__":
             gm_schedulerG.step(avgG_loss)
             gm_schedulerINFO.step(avgINFO_loss)
 
-            gm_cfg.log_in_board( "infomnist_z10 loss", 
+            gm_cfg.log_in_board( "infomnist_z20NLL loss", 
                 {"d_loss": avgD_loss, 
                 "g_loss": avgG_loss, 
                 "info_loss": avgINFO_loss, 

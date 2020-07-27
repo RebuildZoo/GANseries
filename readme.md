@@ -16,11 +16,13 @@ Pioneering work in GAN:
 
 ## 01. DC-GAN for MNIST
 
-This is the first GAN using transposed convolution as **G** and convolution as **D**. 
+DCGAN is the first GAN using transposed convolution as **G** and convolution as **D**. 
+![image](illus/dcgan_pipeline.png)
+A tiny dcgan were deployed in /arch/dcgan_minist.py to map the a **N(0, 1)**<sup>16</sup> or **U(-1, 1)**<sup>16</sup> distribution to **MNIST(**min=0, max=1**)**<sup>(28,28)</sup>.
 
 ![image](illus/dcgan_mnist.png)
 
-In /arch, we deployed a mini dcgan to map the a **N(0, 1)^16** or **U(-1, 1)^16** distribution to **MNIST(min0, max1)^(28, 28)**.
+
 
 |Item | #Layers | #Paras | Learning rate |
 |-|-|-|-|
@@ -41,9 +43,9 @@ For Tatal Train:
 - Initialization: xavier, norm, kaming have few differences. 
 - Noise can be **N(0, 1)^16** or **U(-1, 1)^16**, cannot be **U(0, 1)^16**. 
 
-Unfortunately, GANs' losses are very non-intuitive. Mostly it happens down to the fact that generator and discriminator are competing against each other, hence improvement on the one means the higher loss on the other, until this other learns better on the received loss, which screws up its competitor, etc.
+Unfortunately, GANs' losses are non-intuitive. Mostly it happens down to the fact that G and D are competing against each other, hence improvement on the one means the higher loss on the other, until this other learns better on the received loss, which screws up its competitor, etc.
 
-Now one thing that should happen often enough is that both D and G losses are converging to some permanent numbers:
+One thing that should happen often enough is that both D and G losses are converging to some permanent numbers:
 ![image](illus/dcgan_loss.png)
 
 This loss convergence would normally signify that the GAN model found some optimum, where it can't improve more, which also should mean that it has learned well enough. (Also note, that the numbers themselves usually aren't very informative.)
@@ -54,4 +56,23 @@ Here are a few side notes:
 (From [stackoverflow](https://stackoverflow.com/questions/42690721/how-to-interpret-the-discriminators-loss-and-the-generators-loss-in-generative))
 
 ## 02. InfoGAN for MNIST
-InfoGAN is a type of generative adversarial network that modifies the GAN objective to encourage it to learn interpretable and meaningful representations. This is done by maximizing the mutual information between a fixed small subset of the GAN’s noise variables and the observations.
+Bsed on easy trained DC-GAN, InfoGAN modifies the GAN's objective to encourage it to learn interpretable and meaningful representations. This is done by maximizing the *mutual information* between a fixed small subset of the GAN’s noise variables and the observations.
+![image](illus/infogan_pipeline.png)
+Here the latent code was divided into 3 parts : implicit or incompressible meaning (dim = X), discrete meaning (dim = categories), continuous meaning (dim = principal components needed). 
+
+When traning, G and D were carried out in exactly the same training mode as ordinary GAN. 
+
+By adding a classifier for discrete meaning learning("drastic change in shape", supervised by `nn.CrossEntropyLoss` wrt. the discrete part of G's input) and a regressor for continuous meaning learning("continuous variations in style", supervised by `nn.MSELoss`, wrt. the continuous part of G's input) in the last layer of D, the multiple information is used to guide G to learn the clear categories information and the principal components(PC, e.g. rotation, thickness, etc.) within the category. The part may be regarded as **Q** in some deployments.
+
+
+More Tricks: 
+- 1) To guarantee the one-hot categories definition to be exactly consistent with the **N<sup>+</sup>** from 0, 1, ..., 9, we can introduce the real label part of MNIST into the training process of D's classifier.
+Otherwise, the learning process will only use the shape of MNIST image to cluster(K = 10), and the result does not guarantee that each class has only one type handwritten digit.
+Despite all this, As demonstrated in paper, training without real label guide also achieved 5% error to classify MNIST after class-matching. 
+
+- 2) To make different dim's continuous PC be more disentangled, replace the `nn.MSELoss` to `NormNLL`.
+
+
+
+
+
