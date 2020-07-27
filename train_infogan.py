@@ -31,18 +31,18 @@ class train_config(ut_cfg.config):
         super(train_config, self).__init__(pBs = 64, pWn = 2, p_force_cpu = False)
         self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "infogan"))
         localtime = time.localtime(time.time())
-        self.path_save_mdid = "infomnist_z20" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
+        self.path_save_mdid = "infomnist_z10" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
         self.save_epoch_begin = 50
         self.save_epoch_interval = 20
 
-        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z20_epoch_loss_log.txt"), 'a+')
+        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z10_epoch_loss_log.txt"), 'a+')
         self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
 
         self.height_in = 28
         self.width_in = 28
     
-        self.latent_dim = 20 # z dim
+        self.latent_dim = 10 # z dim
         self.class_num = 10 # class: one-hot discrete
         self.code_dim = 2  # continuous
 
@@ -159,8 +159,8 @@ class train_config(ut_cfg.config):
         view_x_Tsor1 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth1, nrow= w_layout)
         view_x_Tsor2 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth2, nrow= w_layout)
 
-        self.writer.add_image("infomnist_z20_ctndim0", view_x_Tsor1, p_epoch)
-        self.writer.add_image("infomnist_z20_ctndim1", view_x_Tsor2, p_epoch)
+        self.writer.add_image("infomnist_z10_ctndim0", view_x_Tsor1, p_epoch)
+        self.writer.add_image("infomnist_z10_ctndim1", view_x_Tsor2, p_epoch)
 
         # judge_Tsor_batch_i = pnetD(imgF_Tsor_bacth_i)
 
@@ -342,7 +342,7 @@ if __name__ == "__main__":
             gm_schedulerG.step(avgG_loss)
             gm_schedulerINFO.step(avgINFO_loss)
 
-            gm_cfg.log_in_board( "infomnist_z20 loss", 
+            gm_cfg.log_in_board( "infomnist_z10 loss", 
                 {"d_loss": avgD_loss, 
                 "g_loss": avgG_loss, 
                 "info_loss": avgINFO_loss, 
