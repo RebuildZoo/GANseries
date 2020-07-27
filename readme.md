@@ -64,13 +64,25 @@ When traning, G and D were carried out in exactly the same training mode as ordi
 
 By adding a classifier for discrete meaning learning("drastic change in shape", supervised by `nn.CrossEntropyLoss` wrt. the discrete part of G's input) and a regressor for continuous meaning learning("continuous variations in style", supervised by `nn.MSELoss`, wrt. the continuous part of G's input) in the last layer of D, the multiple information is used to guide G to learn the clear categories information and the principal components(PC, e.g. rotation, thickness, etc.) within the category. The part may be regarded as **Q** in some deployments.
 
+A tiny dcgan were deployed in /arch/dcgan_minist.py to map the a **U(-1, 1)**<sup>16</sup> distribution to **MNIST(**min=0, max=1**)**<sup>(28,28)</sup>.
+
+![image](illus/dcgan_mnist.png)
+
+
+
+|Item | #Layers | #Paras | Learning rate |
+|-|-|-|-|
+| G   | 4 | 172, 608 | 2e-4| 
+| D   | 4 | 142, 208(BN,BN+SN) or 141,824(SN) | 5e-4| 
+
 
 More Tricks: 
-- 1) To guarantee the one-hot categories definition to be exactly consistent with the **N<sup>+</sup>** from 0, 1, ..., 9, we can introduce the real label part of MNIST into the training process of D's classifier.
-Otherwise, the learning process will only use the shape of MNIST image to cluster(K = 10), and the result does not guarantee that each class has only one type handwritten digit.
-Despite all this, As demonstrated in paper, training without real label guide also achieved 5% error to classify MNIST after class-matching. 
+- 1) By adding real label with real image  of MNIST into the training process of Q, one-hot categories definition would be exactly consistent with the **N<sup>+</sup>** 0, 1, ..., 9. 
+Otherwise, the final discrete code may capture an arbitrary K = 10 cluster result,which may keep more than one handwritten digits in a single category.
+Despite all this, as demonstrated in paper, unsupervised training also achieved 5% error to classify MNIST after class-matching. 
 
-- 2) To make different dim's continuous PC be more disentangled, replace the `nn.MSELoss` to `NormNLL`.
+- 2) Regardless of use` nn.MSELoss `Or `NormNLL`, the results are similar. Other methods are needed to make the semantics of continuous dimensions clearer. 
+
 
 
 

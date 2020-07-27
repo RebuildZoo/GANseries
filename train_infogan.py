@@ -52,28 +52,28 @@ class train_config(ut_cfg.config):
         super(train_config, self).__init__(pBs = 64, pWn = 2, p_force_cpu = False)
         self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "infogan"))
         localtime = time.localtime(time.time())
-        self.path_save_mdid = "infomnist_z20NLL" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
+        self.path_save_mdid = "infomnist_z10_MSE" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
-        self.save_epoch_begin = 50
-        self.save_epoch_interval = 20
+        self.save_epoch_begin = 20
+        self.save_epoch_interval = 10
 
-        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z20NLL_epoch_loss_log.txt"), 'a+')
+        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z10_MSE_epoch_loss_log.txt"), 'a+')
         self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
 
         self.height_in = 28
         self.width_in = 28
     
-        self.latent_dim = 20 # z dim
+        self.latent_dim = 10 # z dim
         self.class_num = 10 # class: one-hot discrete
         self.code_dim = 2  # continuous
-        self.test_edge = 2.0
+        self.test_edge = 2.0 # [-test_edge, test_edge]
         self.method_init ="norm"  #"preTrain" #"kaming" #"xavier" # "norm"
-        self.training_epoch_amount = 150
+        self.training_epoch_amount = 100
         
         self.dtroot = os.path.join(ROOT, "datasets")
 
         self.opt_baseLr_D = 5e-4
-        self.opt_baseLr_G = 2e-4
+        self.opt_baseLr_G = 1e-3
         self.opt_bata1 = 0.5
         self.opt_weightdecay = 3e-6
 
@@ -180,8 +180,8 @@ class train_config(ut_cfg.config):
         view_x_Tsor1 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth1, nrow= w_layout)
         view_x_Tsor2 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth2, nrow= w_layout)
 
-        self.writer.add_image("infomnist_z20NLL_ctndim0", view_x_Tsor1, p_epoch)
-        self.writer.add_image("infomnist_z20NLL_ctndim1", view_x_Tsor2, p_epoch)
+        self.writer.add_image("infomnist_z10_MSE_ctndim0", view_x_Tsor1, p_epoch)
+        self.writer.add_image("infomnist_z10_MSE_ctndim1", view_x_Tsor2, p_epoch)
 
         # judge_Tsor_batch_i = pnetD(imgF_batch_i)
 
@@ -263,7 +263,7 @@ if __name__ == "__main__":
     # Loss functions
     adversarial_criterion = nn.BCELoss()
     discrete_criterion = nn.CrossEntropyLoss()
-    continuous_criterion = NormalNLLLoss() #nn.MSELoss()
+    continuous_criterion = nn.MSELoss() # NormalNLLLoss() #
     nn.NLLLoss()
     gm_criterion = [adversarial_criterion, discrete_criterion, continuous_criterion]
     lossD_an_epoch_Lst = []
@@ -345,7 +345,7 @@ if __name__ == "__main__":
 
                 lossINFO =  discrete_criterion(predDsctF_batch_i, labelF_batch_i) + \
                     discrete_criterion(predDsctR_batch_i, labelR_batch_i) + \
-                    2 * gm_lambda_con * continuous_criterion(continuous_batch_i, predCtnFmu_batch_i, predCtnFexpvar_batch_i)
+                    2 * gm_lambda_con * continuous_criterion(continuous_batch_i, predCtnFmu_batch_i)
                 
 
                 lossINFO.backward()
@@ -364,7 +364,7 @@ if __name__ == "__main__":
             gm_schedulerG.step(avgG_loss)
             gm_schedulerINFO.step(avgINFO_loss)
 
-            gm_cfg.log_in_board( "infomnist_z20NLL loss", 
+            gm_cfg.log_in_board( "infomnist_z10_MSE loss", 
                 {"d_loss": avgD_loss, 
                 "g_loss": avgG_loss, 
                 "info_loss": avgINFO_loss, 

@@ -83,14 +83,17 @@ class Discriminator_wQ(nn.Module):
         )
 
         self.Q_classhead = nn.Sequential(
+            # Conv2d_wSN(ndf * 8, ndf * 4, 4, 1, 0, bn_flag = True), 
             nn.utils.spectral_norm(nn.Conv2d(ndf * 8, n_classes, 4, 1, 0)),
             # nn.Linear(ndf * 8* 4 *4, n_classes), 
         )
         self.Q_codehead_mu = nn.Sequential(
+            # Conv2d_wSN(ndf * 8, ndf * 4, 4, 1, 0, bn_flag = True), 
             nn.utils.spectral_norm(nn.Conv2d(ndf * 8, code_dim, 4, 1, 0)),
             # nn.Linear(ndf * 8* 4 *4, code_dim)
         )
         self.Q_codehead_var = nn.Sequential(
+            # Conv2d_wSN(ndf * 8, ndf * 4, 4, 1, 0, bn_flag = True), 
             nn.utils.spectral_norm(nn.Conv2d(ndf * 8, code_dim, 4, 1, 0)),
             # nn.Linear(ndf * 8* 4 *4, code_dim)
         )
@@ -134,10 +137,11 @@ def teat_combine():
     gm_gnr = Generator(62, 10, 2)
     gm_dcm = Discriminator_wQ(10, 2)
 
-    j_Tsor, dsc_Tsor, ctn_Tsor = gm_dcm(gm_gnr(x_Tsor))
+    j_Tsor, dsc_Tsor, ctn_mu_Tsor, ctn_var_Tsor = gm_dcm(gm_gnr(x_Tsor))
     print("output shape:", j_Tsor.shape) # [5, 1]
     print("output shape:", dsc_Tsor.shape) # [5, 10]
-    print("output shape:", ctn_Tsor.shape) # [5, 2]
+    print("output shape:", ctn_mu_Tsor.shape) # [5, 2]
+    print("output shape:", ctn_var_Tsor.shape) # [5, 2]
 
 if __name__ == "__main__":
 
