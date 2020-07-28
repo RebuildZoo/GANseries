@@ -108,9 +108,9 @@ class Discriminator_wQ(nn.Module):
         qQdiscrete_Tsor = torch.softmax(qQdiscrete_Tsor, dim=-1) # shape(BS, 10), sum10=1
         
         qQcontinuous_mu_Tsor = self.Q_codehead_mu(px_Tsor).view(BS, -1)
-        qQcontinuous_expvar_Tsor = torch.exp(self.Q_codehead_var(px_Tsor).view(BS, -1))
-
-        return qDjudge_Tsor, qQdiscrete_Tsor, qQcontinuous_mu_Tsor, qQcontinuous_expvar_Tsor
+        qQcontinuous_var_Tsor = torch.exp(self.Q_codehead_var(px_Tsor).view(BS, -1))
+        # the standard deviation must produce a positive value
+        return qDjudge_Tsor, qQdiscrete_Tsor, qQcontinuous_mu_Tsor, qQcontinuous_var_Tsor
 
 
 def test_generator():

@@ -53,7 +53,7 @@ class train_config(ut_cfg.config):
 
         self.opt_baseLr_D = 5e-4
         self.opt_baseLr_G = 2e-4
-        self.opt_bata1 = 0.5
+        self.opt_beta1 = 0.5
         self.opt_weightdecay = 3e-6
         
         
@@ -180,14 +180,14 @@ if __name__ == "__main__":
     gm_optimizerG = optim.Adam(
         params = gm_netG.parameters(),
         lr = gm_cfg.opt_baseLr_G,
-        betas= (gm_cfg.opt_bata1, 0.99),
+        betas= (gm_cfg.opt_beta1, 0.99),
         # weight_decay = gm_cfg.opt_weightdecay
     )
 
     gm_optimizerD = optim.Adam(
         params = gm_netD.parameters(),
         lr = gm_cfg.opt_baseLr_D,
-        betas= (gm_cfg.opt_bata1, 0.99),
+        betas= (gm_cfg.opt_beta1, 0.99),
         # weight_decay = gm_cfg.opt_weightdecay
     )
 

@@ -28,11 +28,13 @@ tensorboard --logdir outputs --port 8890
 
 class NormalNLLLoss(nn.Module):
     """
-    https://github.com/Natsu6767/InfoGAN-PyTorch/blob/master/utils.py
     Calculate the negative log likelihood
     of normal distribution.
     This needs to be minimised.
     Treating Q(cj | x) as a factored Gaussian.
+    let Var = \sigma^2, 
+    - f(x)=\frac{1}{ \sqrt{2 \pi \cdot Var}} e^{-\frac{(x-\mu)^2}{2 \cdot Var}}
+    - -ln(f) = 0.5 * log(2 \pi \cdot Var) + \frac{(x-\mu)^2}{2 \cdot Var}
     """
     def __init__(self, size_average=None, reduce=None, reduction="mean"):
         super(NormalNLLLoss, self).__init__()
@@ -40,11 +42,13 @@ class NormalNLLLoss(nn.Module):
     def __str__(self):
         return "customed NormalNLLLoss"
     def forward(self, x, mu, var):
-        logli = -0.5 * torch.log(2 * np.pi* var + 1e-6) - (x - mu)**2 / (2*var +  1e-6)
+        # shape: (BS, cont_dim)
+        logli = 0.5 * torch.log(2 * np.pi* var + 1e-6) + (x - mu)**2 / (2*var +  1e-6)
         if self.reduction == "mean":
-            nll = - logli.sum(1).mean()
+            nll = logli.sum(1).mean()
+        elif self.reduction == "sum":
+            nll = logli.sum()
         return nll
-    
 
 
 class train_config(ut_cfg.config):
@@ -52,12 +56,12 @@ class train_config(ut_cfg.config):
         super(train_config, self).__init__(pBs = 64, pWn = 2, p_force_cpu = False)
         self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "infogan"))
         localtime = time.localtime(time.time())
-        self.path_save_mdid = "infomnist_z10_MSE" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
+        self.path_save_mdid = "infomnist_z10unsp_NLL" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
         self.save_epoch_begin = 20
         self.save_epoch_interval = 10
 
-        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z10_MSE_epoch_loss_log.txt"), 'a+')
+        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z10unsp_NLL_epoch_loss_log.txt"), 'a+')
         self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
 
         self.height_in = 28
@@ -66,15 +70,16 @@ class train_config(ut_cfg.config):
         self.latent_dim = 10 # z dim
         self.class_num = 10 # class: one-hot discrete
         self.code_dim = 2  # continuous
-        self.test_edge = 2.0 # [-test_edge, test_edge]
+        self.test_edge = 2.0 # [-test_edge, ]
         self.method_init ="norm"  #"preTrain" #"kaming" #"xavier" # "norm"
         self.training_epoch_amount = 100
         
         self.dtroot = os.path.join(ROOT, "datasets")
 
         self.opt_baseLr_D = 5e-4
-        self.opt_baseLr_G = 1e-3
-        self.opt_bata1 = 0.5
+        self.opt_baseLr_G = 2e-4
+        self.opt_baseLr_INFO = 0.5 * self.opt_baseLr_G
+        self.opt_beta1 = 0.5
         self.opt_weightdecay = 3e-6
 
         # synchronize the rand seed
@@ -180,8 +185,8 @@ class train_config(ut_cfg.config):
         view_x_Tsor1 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth1, nrow= w_layout)
         view_x_Tsor2 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth2, nrow= w_layout)
 
-        self.writer.add_image("infomnist_z10_MSE_ctndim0", view_x_Tsor1, p_epoch)
-        self.writer.add_image("infomnist_z10_MSE_ctndim1", view_x_Tsor2, p_epoch)
+        self.writer.add_image("infomnist_z10unsp_NLL_ctndim0", view_x_Tsor1, p_epoch)
+        self.writer.add_image("infomnist_z10unsp_NLL_ctndim1", view_x_Tsor2, p_epoch)
 
         # judge_Tsor_batch_i = pnetD(imgF_batch_i)
 
@@ -220,19 +225,19 @@ if __name__ == "__main__":
     gm_optimizerG = optim.Adam(
         params = gm_netG.parameters(),
         lr = gm_cfg.opt_baseLr_G,
-        betas= (gm_cfg.opt_bata1, 0.99),
+        betas= (gm_cfg.opt_beta1, 0.99),
         # weight_decay = gm_cfg.opt_weightdecay
     )
     gm_optimizerD = optim.Adam(
         params = gm_netD.parameters(),
         lr = gm_cfg.opt_baseLr_D,
-        betas= (gm_cfg.opt_bata1, 0.99),
+        betas= (gm_cfg.opt_beta1, 0.99),
         # weight_decay = gm_cfg.opt_weightdecay
     )
     gm_optimizerINFO = optim.Adam(
         params = [{'params':gm_netG.parameters()}, {'params':gm_netD.parameters()}],
-        lr = gm_cfg.opt_baseLr_G * 0.5,
-        betas= (gm_cfg.opt_bata1, 0.99),
+        lr = gm_cfg.opt_baseLr_INFO,
+        betas= (gm_cfg.opt_beta1, 0.99),
         # weight_decay = gm_cfg.opt_weightdecay
     )
 
@@ -263,7 +268,7 @@ if __name__ == "__main__":
     # Loss functions
     adversarial_criterion = nn.BCELoss()
     discrete_criterion = nn.CrossEntropyLoss()
-    continuous_criterion = nn.MSELoss() # NormalNLLLoss() #
+    continuous_criterion = NormalNLLLoss() # nn.MSELoss() # 
     nn.NLLLoss()
     gm_criterion = [adversarial_criterion, discrete_criterion, continuous_criterion]
     lossD_an_epoch_Lst = []
@@ -339,14 +344,13 @@ if __name__ == "__main__":
                 # labelF_batch_i
                 imgF_batch_i = gm_netG(combined_batch_i) # use the updated G; diff from line 257
 
-                _, predDsctF_batch_i, predCtnFmu_batch_i, predCtnFexpvar_batch_i = gm_netD(imgF_batch_i) # use the updated D; diff from line 260/ 282
+                _, predDsctF_batch_i, predCtnFmu_batch_i, predCtnFvar_batch_i = gm_netD(imgF_batch_i) # use the updated D; diff from line 260/ 282
 
                 _, predDsctR_batch_i, _, _ = gm_netD(imgR_batch_i) ### add novelly...
 
                 lossINFO =  discrete_criterion(predDsctF_batch_i, labelF_batch_i) + \
-                    discrete_criterion(predDsctR_batch_i, labelR_batch_i) + \
-                    2 * gm_lambda_con * continuous_criterion(continuous_batch_i, predCtnFmu_batch_i)
-                
+                    2 * gm_lambda_con * continuous_criterion(continuous_batch_i, predCtnFmu_batch_i, predCtnFvar_batch_i)
+                # # discrete_criterion(predDsctR_batch_i, labelR_batch_i) + \
 
                 lossINFO.backward()
 
@@ -364,7 +368,7 @@ if __name__ == "__main__":
             gm_schedulerG.step(avgG_loss)
             gm_schedulerINFO.step(avgINFO_loss)
 
-            gm_cfg.log_in_board( "infomnist_z10_MSE loss", 
+            gm_cfg.log_in_board( "infomnist_z10unsp_NLL loss", 
                 {"d_loss": avgD_loss, 
                 "g_loss": avgG_loss, 
                 "info_loss": avgINFO_loss, 
