@@ -15,7 +15,7 @@ Pioneering work in GAN:
 
 
 ## 01. DC-GAN for MNIST
-
+> Q: How to make GAN more stable? A: change the FC to Conv. 
 ### Background
 DCGAN is the first GAN using transposed convolution as **G** and convolution as **D**. 
 ![image](illus/dcgan_pipeline.png)
@@ -64,6 +64,7 @@ Here are a few side notes:
 
 
 ## 02. InfoGAN for MNIST
+> Q: How to give each dimension meaning without supervision? A: Function is defined by structure. 
 
 ### Background
 Bsed on the DCGAN, InfoGAN modifies the GAN's objective to encourage it to learn interpretable and meaningful representations. This is done by maximizing the *mutual information* between a fixed small subset of the GAN’s noise variables and the observations.
