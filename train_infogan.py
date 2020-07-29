@@ -56,12 +56,12 @@ class train_config(ut_cfg.config):
         super(train_config, self).__init__(pBs = 64, pWn = 2, p_force_cpu = False)
         self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "infogan"))
         localtime = time.localtime(time.time())
-        self.path_save_mdid = "infomnist_z10unsp_NLL" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
+        self.path_save_mdid = "infomnist_z10_MSE" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
         self.save_epoch_begin = 20
         self.save_epoch_interval = 10
 
-        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z10unsp_NLL_epoch_loss_log.txt"), 'a+')
+        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z10_MSE_epoch_loss_log.txt"), 'a+')
         self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
 
         self.height_in = 28
@@ -185,8 +185,8 @@ class train_config(ut_cfg.config):
         view_x_Tsor1 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth1, nrow= w_layout)
         view_x_Tsor2 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth2, nrow= w_layout)
 
-        self.writer.add_image("infomnist_z10unsp_NLL_ctndim0", view_x_Tsor1, p_epoch)
-        self.writer.add_image("infomnist_z10unsp_NLL_ctndim1", view_x_Tsor2, p_epoch)
+        self.writer.add_image("infomnist_z10_MSE_ctndim0", view_x_Tsor1, p_epoch)
+        self.writer.add_image("infomnist_z10_MSE_ctndim1", view_x_Tsor2, p_epoch)
 
         # judge_Tsor_batch_i = pnetD(imgF_batch_i)
 
@@ -268,7 +268,7 @@ if __name__ == "__main__":
     # Loss functions
     adversarial_criterion = nn.BCELoss()
     discrete_criterion = nn.CrossEntropyLoss()
-    continuous_criterion = NormalNLLLoss() # nn.MSELoss() # 
+    continuous_criterion = nn.MSELoss() # NormalNLLLoss() # 
     nn.NLLLoss()
     gm_criterion = [adversarial_criterion, discrete_criterion, continuous_criterion]
     lossD_an_epoch_Lst = []
@@ -305,7 +305,7 @@ if __name__ == "__main__":
                 imgF_batch_i = gm_netG(combined_batch_i)
 
                 gt_batch_i = torch.full((BS, 1), gm_real_label, device = gm_cfg.device)
-                judge_batch_i, _, _, _ = gm_netD(imgF_batch_i)
+                judge_batch_i, _, _ = gm_netD(imgF_batch_i)
 
                 lossG = adversarial_criterion(judge_batch_i, gt_batch_i)
 
@@ -322,12 +322,12 @@ if __name__ == "__main__":
                 gm_optimizerD.zero_grad()
                 # train D with real
                 gt_batch_i.fill_(gm_real_label*gm_real_confidence) # reuse the space
-                predR_batch_i, _, _, _ = gm_netD(imgR_batch_i)
+                predR_batch_i, _, _ = gm_netD(imgR_batch_i)
                 lossD_R = adversarial_criterion(predR_batch_i, gt_batch_i)
                 lossD_R.backward()
                 # train D with fake
                 gt_batch_i.fill_(gm_fake_label) # reuse the space
-                predF_batch_i, _, _, _ = gm_netD(imgF_batch_i.detach())
+                predF_batch_i, _, _ = gm_netD(imgF_batch_i.detach())
                 lossD_F = adversarial_criterion(predF_batch_i, gt_batch_i)
                 lossD_F.backward()
 
@@ -344,14 +344,21 @@ if __name__ == "__main__":
                 # labelF_batch_i
                 imgF_batch_i = gm_netG(combined_batch_i) # use the updated G; diff from line 257
 
-                _, predDsctF_batch_i, predCtnFmu_batch_i, predCtnFvar_batch_i = gm_netD(imgF_batch_i) # use the updated D; diff from line 260/ 282
+                _, predDsctF_batch_i, predCtnFmu_batch_i = gm_netD(imgF_batch_i) # use the updated D; diff from line 260/ 282
 
-                _, predDsctR_batch_i, _, _ = gm_netD(imgR_batch_i) ### add novelly...
+                _, predDsctR_batch_i, _ = gm_netD(imgR_batch_i) ### add novelly...
 
+                roiF_batch_i = imgF_batch_i[:, :, :, 7:21] # encourage x \in (7, 21)
+                aux_thickness_batch_i = roiF_batch_i.reshape(BS, -1).sum(-1) / (roiF_batch_i.nelement()/BS)
+                aux_thickness_batch_i = aux_thickness_batch_i.detach()
+                continuous_batch_i[:,0] = (continuous_batch_i[:,0] + 1) * (aux_thickness_batch_i + 0.55) - 1
+                
                 lossINFO =  discrete_criterion(predDsctF_batch_i, labelF_batch_i) + \
-                    2 * gm_lambda_con * continuous_criterion(continuous_batch_i, predCtnFmu_batch_i, predCtnFvar_batch_i)
+                    discrete_criterion(predDsctR_batch_i, labelR_batch_i) + \
+                    2 * gm_lambda_con * continuous_criterion(continuous_batch_i, predCtnFmu_batch_i)
                 # # discrete_criterion(predDsctR_batch_i, labelR_batch_i) + \
-
+                #
+                
                 lossINFO.backward()
 
                 lossINFO_an_epoch_Lst.append(lossINFO.item())
@@ -368,7 +375,7 @@ if __name__ == "__main__":
             gm_schedulerG.step(avgG_loss)
             gm_schedulerINFO.step(avgINFO_loss)
 
-            gm_cfg.log_in_board( "infomnist_z10unsp_NLL loss", 
+            gm_cfg.log_in_board( "infomnist_z10_MSE loss", 
                 {"d_loss": avgD_loss, 
                 "g_loss": avgG_loss, 
                 "info_loss": avgINFO_loss, 

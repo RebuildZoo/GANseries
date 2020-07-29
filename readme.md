@@ -84,22 +84,28 @@ A tiny InfoGAN were deployed in /arch/dcgan_minist.py to map the a **z~U(-1, 1)*
 |Item | #Layers | #Paras | Learning rate |
 |-|-|-|-|
 | G   | 4 | 184, 896 | 2e-4| 
-| DwQ   | 3 + (4head) | 170, 894 | 5e-4 for D, 1e-4 for Q-G| 
+| DwQ   | 3 | 170, 894 (4head:NormNLL) or 166,796 (3 head:MSE) | 5e-4 for D, 1e-4 for Q-G| 
 
 
 ### Take Home
-- By adding real label with real image  of MNIST into the training process of Q, one-hot categories definition would be exactly consistent with the **N<sup>+</sup>** 0, 1, ..., 9. 
-Otherwise, the final discrete code may capture an arbitrary K = 10 cluster result,which may keep more than one handwritten digits in a single category.
-Despite all this, as demonstrated in paper, unsupervised training also achieved 5% error to classify MNIST after class-matching. 
-
+Stability of Training Process:
 - The use of ` nn.MSELoss `or `NormNLL` to Q's continuous learning has few difference in generative results.
 
 - The relative value of the 3 learning rates of G, D, G&D  has a great influence on the final results and stability. More experiments are needed for quantitative research. 
 
-![image](illus/infogan_mnist2.png)
+Quality of generated results: 
+![image](illus/infogan_mnist_improved.png)
+- By adding real label with real image  of MNIST into the training process of Q, one-hot categories definition would be exactly consistent with the **N<sup>+</sup>** 0, 1, ..., 9, as shown in the 2nd group of experiments.  
+Otherwise, the final discrete code may capture an arbitrary K = 10 cluster result,which may keep more than one handwritten digits in a single category.
+Despite all this, as demonstrated in paper, unsupervised training also achieved 5% error to classify MNIST after class-matching. 
+
+- By adding Thickness Guidance in one of the Continuous dim (no harm in CC[0])into the training process of Q, the value of CC [0] is related to random sampling and the thickness of figure in corresponding fake image, while the value of CC [1] only comes from random sampling of **U(- 1,1)**. In this way, CC [0] and CC [1] will be more **disentangled**. As shown in the 3rd group of experiments, CC [0] implies a more thickness dependent and linear relationship. 
+
+
+
 ### Limitations
-InfoGAN contributes to the interpretability of Z, that is, the relationship between *dz* and *dx*. 
-However, its interpretable part coding has obvious disadvantages. 
+Original InfoGAN contributes to the interpretability of Z, that is, the relationship between *dz* and *dx*. 
+However, its interpretable part coding has obvious dis. 
 
 In code of category, it uses one-hot code. Although it is easy to learn, it occupied too many bytes. 
 
