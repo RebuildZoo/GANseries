@@ -11,11 +11,10 @@ Pioneering work in GAN:
 | **WGAN-GP** | NIPS2017 (2601) | Wasserstein Loss + Gradient Penalty |
 | BEGAN     | arXiv2017 ( 649) |add AE arch fully conv |
 
-## Table of Contents
-* [DCGAN on MNIST](#01.-DCGAN-on-MNIST)
-* [WGAN-GP on MNIST](#02.-DCGAN-on-MNIST)
-* [InfoGAN on MNIST](#03.-InfoGAN-on-MNIST)
-
+Existing deployment progress (table of contents): 
+* [DCGAN](#01.-DCGAN-on-MNIST)
+* [WGAN-GP](#02.-WGAN-GP-on-MNIST)
+* [InfoGAN](#03.-InfoGAN-on-MNIST)
 
 ## 01. DCGAN on MNIST
 > Q: How to make GAN more stable? 
