@@ -1,21 +1,25 @@
 # Generative Adversarial Nets
 
 Pioneering work in GAN:
-
-| Arch Name | Accepted (cite) | Details |
+| Arch  | Accepted (cite) | Details |
 |-| -|-|
 | GAN       | NIPS2014 (20895) | vanilla version; unstable & fully connected|
 | c-GAN     | arXiv2014 (2938) | Conditional sampling; full connection |
 | **DCGAN** | arXiv2015 (5807) | first fully conv | 
-| **WGAN-GP** | NIPS2017 (2601) | Wasserstein Loss; The improvement of fully connected structure and WGAN |
 | LSGAN     | Procced2017 (1187) | Loss MSE, fully conv |
 | **InfoGAN**   | NIPS2017 (2006) | Interpretable & Disentangled rep., fully conv|
+| **WGAN-GP** | NIPS2017 (2601) | Wasserstein Loss + Gradient Penalty |
 | BEGAN     | arXiv2017 ( 649) |add AE arch fully conv |
 
+## Table of Contents
+* [DCGAN on MNIST](#01.-DCGAN-on-MNIST)
+* [WGAN-GP on MNIST](#02.-DCGAN-on-MNIST)
+* [InfoGAN on MNIST](#03.-InfoGAN-on-MNIST)
 
 
-## 01. DC-GAN for MNIST
-> Q: How to make GAN more stable? A: FC to Conv. 
+## 01. DCGAN on MNIST
+> Q: How to make GAN more stable? 
+<br/>A: FC to Conv. 
 ### Background
 DCGAN is the first GAN using transposed convolution as **G** and convolution as **D**. 
 ![image](illus/dcgan_pipeline.png)
@@ -60,11 +64,20 @@ Here are a few side notes:
 ### Limitations
 - DCGAN increases the stability from the random dist *p(Z)* to the image dist *p(X)*, but the the relation btw 
 *dz* and *dx* is still unclear, i.e., the invariance before and after mapping is not considered;
-- DCGAN improves the instability of the original GAN from the structural point of view, but later studies show that criterions have a greater influence (WGAN-gp). 
+- DCGAN improves the instability of the original GAN from the structural point of view, but later studies show that criterions have a greater influence (WGAN-GP). 
 
+## 02. WGAN-GP on MNIST
+> Q: How to make GAN more stable? 
+<br/>A: Use better criterion. 
 
-## 02. InfoGAN for MNIST
-> Q: How to give each dimension meaning without supervision? A: Function is defined by structure. 
+### Background
+### Deployment
+### Take Home
+### Limitations
+
+## 03. InfoGAN on MNIST
+> Q: How to give each dimension meaning without supervision? 
+<br/>A: Function is defined by structure. 
 
 ### Background
 Based on the DCGAN, InfoGAN modifies the GAN's objective to encourage it to learn interpretable and meaningful representations. This is done by maximizing the *mutual information* between a fixed small subset of the GAN’s noise variables and the observations.
