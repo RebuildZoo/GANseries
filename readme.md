@@ -4,7 +4,7 @@ Pioneering work in GAN:
 | Arch  | Accepted (cite) | Details |
 |-| -|-|
 | GAN       | NIPS2014 (20895) | vanilla version; unstable & fully connected|
-| c-GAN     | arXiv2014 (2938) | Conditional sampling; full connection |
+| c-GAN     | arXiv2014 (2938) | Conditional sampling |
 | **DCGAN** | arXiv2015 (5807) | first fully conv | 
 | LSGAN     | Procced2017 (1187) | Loss MSE, fully conv |
 | **InfoGAN**   | NIPS2017 (2006) | Interpretable & Disentangled rep., fully conv|
@@ -21,12 +21,12 @@ Existing deployment progress (table of contents):
 <br/>A: FC to Conv. 
 ### Background
 DCGAN is the first GAN using transposed convolution as **G** and convolution as **D**. 
-![image](illus/dcgan_pipeline.png)
+![image](assets/dcgan_pipeline.png)
 
 ### Deployment
 A tiny DCGAN were deployed in /arch/dcgan_minist.py to map the a **N(0, 1)**<sup>16</sup> or **U(-1, 1)**<sup>16</sup> distribution to **MNIST(**min=0, max=1**)**<sup>(28,28)</sup>.
 
-![image](illus/dcgan_mnist.png)
+![image](assets/dcgan_mnist.png)
 
 
 
@@ -52,7 +52,7 @@ For Total Train:
 
 ### Take Home
 GANs' losses are non-intuitive. One thing that should happen often enough is that both D and G losses are converging to some permanent numbers: This loss convergence would normally signify that the GAN model found some optimum, where it can't improve more, which also should mean that it has learned well enough. (Also note, that the numbers themselves usually aren't very informative.)
-![image](illus/dcgan_loss.png)
+![image](assets/dcgan_loss.png)
 
 
 Here are a few side notes:
@@ -80,7 +80,7 @@ Here are a few side notes:
 
 ### Background
 Based on the DCGAN, InfoGAN modifies the GAN's objective to encourage it to learn interpretable and meaningful representations. This is done by maximizing the *mutual information* between a fixed small subset of the GAN’s noise variables and the observations.
-![image](illus/infogan_pipeline.png)
+![image](assets/infogan_pipeline.png)
 Here the latent code was divided into 3 parts : implicit or incompressible meaning (dim = X), discrete meaning (dim = categories), continuous meaning (dim = principal components needed). 
 
 When training, G and D were carried out in exactly the same training mode as ordinary GAN. 
@@ -90,7 +90,7 @@ By adding a classifier for discrete meaning learning ("drastic change in shape")
 ### Deployment
 A tiny InfoGAN were deployed in /arch/dcgan_minist.py to map the a **z~U(-1, 1)**<sup>10</sup>,**dc~Cat(10)**<sup>10</sup>,**cc~U(-1, 1)**<sup>2</sup> joint distribution to **MNIST(**min=0, max=1**)**<sup>(28,28)</sup>.
 
-![image](illus/infogan_mnist.png)
+![image](assets/infogan_mnist.png)
 
 
 |Item | #Layers | #Paras | Learning rate |
@@ -106,7 +106,7 @@ Stability of Training Process:
 - The relative value of the 3 learning rates of G, D, G&D  has a great influence on the final results and stability. More experiments are needed for quantitative research. 
 
 Quality of generated results: 
-![image](illus/infogan_mnist_improved.png)
+![image](assets/infogan_mnist_improved.png)
 - By adding real label with real image  of MNIST into the training process of Q, one-hot categories definition would be exactly consistent with the **N<sup>+</sup>** 0, 1, ..., 9, as shown in the 2nd group of experiments.  
 Otherwise, the final discrete code may capture an arbitrary K = 10 cluster result,which may keep more than one handwritten digits in a single category.
 Despite all this, as demonstrated in paper, unsupervised training also achieved 5% error to classify MNIST after class-matching. 
