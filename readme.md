@@ -126,3 +126,29 @@ In code of continuous:
 2) For different categories, the same CC [i] may make 1 thicker, but 9 thinner. 
 
 The above problems show that although InfoGAB has established the mapping between **dx** and **dz**, the independence and linearity of each dimension are not guaranteed (PCA have both, but cannot generate new instances). 
+
+
+## Credits
+
+Overall Theories: 
+- [Are GANs Created Equal?](http://papers.nips.cc/paper/7350-are-gans-created-equal-a-large-scale-study)
+
+DCGAN:
+- [Implementation](https://github.com/pytorch/examples/blob/234bcff4a2d8480f156799e6b9baae06f7ddc96a/dcgan/main.py#L113)
+- [Empiric Rule1](https://towardsdatascience.com/10-lessons-i-learned-training-generative-adversarial-networks-gans-for-a-year-c9071159628), [Chinese Version](http://blog.itpub.net/29829936/viewspace-2653736/)
+- [Empiric Rule2](https://www.jianshu.com/p/8b8a4ea0b967)
+
+InfoGAN:
+- [Implementation 1: use MSE](https://github.com/eriklindernoren/PyTorch-GAN/blob/master/implementations/infogan/infogan.py)
+- [Implementation 2: use NormNLL](https://github.com/Natsu6767/InfoGAN-PyTorch/blob/master/models/mnist_model.py)
+- [Detailed Anylasis](https://machinelearningmastery.com/how-to-develop-an-information-maximizing-generative-adversarial-network-infogan-in-keras/)
+
+Dazzling Apps:
+- [StyleGAN (NVIDIA)](https://github.com/rosinality/style-based-gan-pytorch)
+
+- [SeFa](https://github.com/genforce/sefa)
+
+- [pix2pix and CycleGAN](https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix)
+
+- [Background Matting](https://github.com/senguptaumd/Background-Matting)
+
