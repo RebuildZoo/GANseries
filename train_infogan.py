@@ -92,7 +92,9 @@ class train_config(ut_cfg.config):
         fixed_z = self.noise_generate_func(self.class_num**2, self.latent_dim) # (100, 62)
         fixed_discrete, _ = self.label_generate_func("fixed", self.class_num**2)
         fixed_continuous_zero = torch.zeros(self.class_num**2, 1)
-        fixed_continuous_lsp = (torch.stack([torch.linspace(-self.test_edge, self.test_edge, self.class_num) for _ in range(self.class_num)]).transpose(0,1)).reshape(-1,1)
+        
+        x = torch.linspace(-self.test_edge, self.test_edge, self.class_num)
+        fixed_continuous_lsp = torch.meshgrid(x, x)[0].reshape(-1,1) # [(-2)x10, ..., (2)x10]
         fixed_continuous1 = torch.cat([fixed_continuous_lsp,fixed_continuous_zero],dim=-1).to(self.device)
         fixed_continuous2 = torch.cat([fixed_continuous_zero, fixed_continuous_lsp],dim=-1).to(self.device)
         
@@ -107,7 +109,8 @@ class train_config(ut_cfg.config):
     def label_generate_func(self, mode:str, batchsize:int):
         figure_Tsor = None
         if mode == "fixed":
-            figure_Tsor = torch.cat([torch.arange(self.class_num) for _ in range(self.class_num)]).view(-1,1) # (10*10, 1)
+            x = torch.arange(self.class_num)
+            figure_Tsor = torch.meshgrid(x, x)[-1].reshape(-1,1) # [(0~9)x10]
         elif mode == "random":
             figure_Tsor = torch.randint(self.class_num, (batchsize, 1)) # (Bs, 1)
         assert figure_Tsor is not None, "invalid mode"
