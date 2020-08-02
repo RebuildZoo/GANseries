@@ -54,10 +54,16 @@ class config(object):
     def check_arch_para(self, pNet):
         para_amount = 0
         for para_i in pNet.parameters():
-            # para_i is a torch.nn.parameter.Parameter, grad 默认 True
+            # para_i is a torch.nn.parameter.Parameter, grad is True by default. 
             # print(para_i.shape, para_i.requires_grad)
-            para_amount+= para_i.numel()
+            para_amount += para_i.numel()
         print("[net info] para_amount=%d"%para_amount)
+
+    def distribute_arch_para(self, pNet):
+        para_Lst = []
+        for para_i in pNet.parameters():
+            para_Lst.append(para_i.reshape(-1))
+        return torch.cat(para_Lst)
 
     def check_path_valid(self, path)->str:
         assert os.path.isdir(path) or os.path.isfile(path), "invalid path in " + path

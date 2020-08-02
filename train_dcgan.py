@@ -31,7 +31,7 @@ tensorboard --logdir outputs --port 8890
 class train_config(ut_cfg.config):
     def __init__(self):
         super(train_config, self).__init__(pBs = 64, pWn = 2, p_force_cpu = False)
-        self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs"))
+        self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "dcgan"))
         localtime = time.localtime(time.time())
         self.path_save_mdid = "dcmnist" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
@@ -135,7 +135,8 @@ class train_config(ut_cfg.config):
             data_Dic, epoch)
 
     def validate(self, pnetD, pnetG, p_epoch):
-        
+        pnetD = pnetD.eval()
+        pnetG = pnetG.eval()
         # use the fixed noise to test the GAN performance
         w_layout = 8
         imgF_Tsor_bacth_i = pnetG(self.fixed_noise)
@@ -144,12 +145,17 @@ class train_config(ut_cfg.config):
 
         self.writer.add_image("Generator Outputs", view_x_Tsor, p_epoch)
 
-        judge_Tsor_batch_i = pnetD(imgF_Tsor_bacth_i)
+        g_weights = self.distribute_arch_para(pnetG)
+        d_weights = self.distribute_arch_para(pnetD)
 
-        judge_Arr = np.zeros(gm_cfg.ld_batchsize)
-        for idex, ele_i in enumerate(judge_Tsor_batch_i):
-            judge_Arr[idex] = round(ele_i.item(), 3)
-        print("[validate] epoch %d  D's judgement:\n"%(p_epoch), np.reshape(judge_Arr, (-1, w_layout)))
+        self.writer.add_histogram("G weights Dist", g_weights, p_epoch)
+        self.writer.add_histogram("D weights Dist", d_weights, p_epoch)
+        # judge_Tsor_batch_i = pnetD(imgF_Tsor_bacth_i)
+
+        # judge_Arr = np.zeros(gm_cfg.ld_batchsize)
+        # for idex, ele_i in enumerate(judge_Tsor_batch_i):
+        #     judge_Arr[idex] = round(ele_i.item(), 3)
+        # print("[validate] epoch %d  D's judgement:\n"%(p_epoch), np.reshape(judge_Arr, (-1, w_layout)))
 
         
 
@@ -222,6 +228,8 @@ if __name__ == "__main__":
         for epoch_i in range(gm_cfg.training_epoch_amount):
             start=time.time()
             # single epoch
+            gm_netD = gm_netD.train()
+            gm_netG = gm_netG.train()
             for iter_idx, (img_Tsor_bacth_i, _ ) in enumerate(gm_trainloader):
                 ############################
                 # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
