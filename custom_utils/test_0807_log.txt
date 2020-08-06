@@ -1,0 +1,86 @@
++Net-Generator-+--------+
+| item         | detail |
++--------------+--------+
+| #parameters  | 184896 |
+| #conv_layers | 4      |
+| #fc_layers   | 0      |
++--------------+--------+
++Net-Generator-+--------+
+| item         | detail |
++--------------+--------+
+| #parameters  | 184896 |
+| #conv_layers | 4      |
+| #fc_layers   | 0      |
++--------------+--------+
++Net-Generator-+--------+
+| item         | detail |
++--------------+--------+
+| #parameters  | 184896 |
+| #conv_layers | 4      |
+| #fc_layers   | 0      |
++--------------+--------+
++Net-Generator-+--------+
+| item         | detail |
++--------------+--------+
+| #parameters  | 184896 |
+| #conv_layers | 4      |
+| #fc_layers   | 0      |
++--------------+--------+
+epoch= 0, time_cost(min)= 0.2, avg_loss= 0.85689777135849, 
+epoch= 1, time_cost(min)= 0.2, avg_loss= 0.4789196252822876, 
+epoch= 2, time_cost(min)= 0.2, avg_loss= 0.3328478932380676, 
+epoch= 3, time_cost(min)= 0.2, avg_loss= 0.5798083543777466, 
+epoch= 4, time_cost(min)= 0.2, avg_loss= 0.6845325231552124, 
+epoch= 5, time_cost(min)= 0.2, avg_loss= 0.8628709316253662, 
+epoch= 6, time_cost(min)= 0.2, avg_loss= 0.18333280086517334, 
+epoch= 7, time_cost(min)= 0.2, avg_loss= 0.2972608208656311, 
+epoch= 8, time_cost(min)= 0.2, avg_loss= 0.8550199270248413, 
+epoch= 9, time_cost(min)= 0.2, avg_loss= 0.06329184770584106, 
++Net-Generator-+--------+
+| item         | detail |
++--------------+--------+
+| #parameters  | 184896 |
+| #conv_layers | 4      |
+| #fc_layers   | 0      |
++--------------+--------+
++Net-Generator-+--------+
+| item         | detail |
++--------------+--------+
+| #parameters  | 184896 |
+| #conv_layers | 4      |
+| #fc_layers   | 0      |
++--------------+--------+
+epoch= 000, time_cost(min)= 0.2, avg_loss= 0.3547871708869934, 
+epoch= 001, time_cost(min)= 0.2, avg_loss= 0.9965078234672546, 
+epoch= 002, time_cost(min)= 0.2, avg_loss= 0.487037718296051, 
+epoch= 003, time_cost(min)= 0.2, avg_loss= 0.7700827717781067, 
+epoch= 004, time_cost(min)= 0.2, avg_loss= 0.3687792420387268, 
+epoch= 005, time_cost(min)= 0.2, avg_loss= 0.07914799451828003, 
+epoch= 006, time_cost(min)= 0.2, avg_loss= 0.552053689956665, 
+epoch= 007, time_cost(min)= 0.2, avg_loss= 0.7266453504562378, 
+epoch= 008, time_cost(min)= 0.2, avg_loss= 0.5487191677093506, 
+epoch= 009, time_cost(min)= 0.2, avg_loss= 0.8294784426689148, 
++Net-Generator-+--------+
+| item         | detail |
++--------------+--------+
+| #parameters  | 184896 |
+| #conv_layers | 4      |
+| #fc_layers   | 0      |
++--------------+--------+
++Net-Generator-+--------+
+| item         | detail |
++--------------+--------+
+| #parameters  | 184896 |
+| #conv_layers | 4      |
+| #fc_layers   | 0      |
++--------------+--------+
+epoch= 0, time_cost(min)= 0.2, avg_loss= 0.65557, 
+epoch= 1, time_cost(min)= 0.2, avg_loss= 0.87522, 
+epoch= 2, time_cost(min)= 0.2, avg_loss= 0.19052, 
+epoch= 3, time_cost(min)= 0.2, avg_loss= 0.17595, 
+epoch= 4, time_cost(min)= 0.2, avg_loss= 0.92819, 
+epoch= 5, time_cost(min)= 0.2, avg_loss= 0.82101, 
+epoch= 6, time_cost(min)= 0.2, avg_loss= 0.14107, 
+epoch= 7, time_cost(min)= 0.2, avg_loss= 0.52154, 
+epoch= 8, time_cost(min)= 0.2, avg_loss= 0.82172, 
+epoch= 9, time_cost(min)= 0.2, avg_loss= 0.12367, 

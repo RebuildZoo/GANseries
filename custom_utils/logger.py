@@ -22,8 +22,8 @@ tensorboard --logdir outputs --port 8890
 class logger(object):
     def __init__(self, log_dir : str, tag : str):
         os.makedirs(log_dir, exist_ok= True)
-        localtime = time.localtime(time.time()); date = f"{localtime.tm_mon}{localtime.tm_mday}"
-        logfile_path = os.path.join(log_dir, tag + date + "logfile.txt")
+        localtime = time.localtime(time.time()); date = "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
+        logfile_path = os.path.join(log_dir, tag + "_" + date + "_" +"log.txt")
         self.txt_writer = open(logfile_path, 'a+')
         self.board_writer = SummaryWriter(log_dir=os.path.join(log_dir, "board"))
 
@@ -33,11 +33,27 @@ class logger(object):
             print(para_i, end= "", file = self.txt_writer)
         print("")
         print("", file = self.txt_writer)
-    
-    def log_the_table(self, title, info_table: list):
+        self.txt_writer.flush()
 
+    def log_the_table(self, title, info_table: list):
         table = AsciiTable(info_table, title).table
         self.log_the_str(table)
+
+
+    def log_scalars_singleline(self, info_table: list):
+        line_str = ""
+        for idx_i, info_pair in enumerate(info_table):
+            info_val = info_pair[1]
+            if isinstance(info_val, float): 
+                info_val = str(round(info_val, 5))
+            elif isinstance(info_val, float):
+                info_val = "%03d"%(info_val)
+            info_str = "= ".join([str(info_pair[0]), str(info_val)])
+            if idx_i != len(info_table): 
+                info_str += ", "
+            line_str += info_str
+        self.log_the_str(line_str)
+        
 
     def summarize_config(self, pConfig):
         info_table = [['item', 'detail']]
@@ -50,6 +66,7 @@ class logger(object):
         info_table.append(["base Lr", pConfig.opt_baseLr])
         info_table.append(["device", pConfig.device])
         
+        self.log_the_table("config" , info_table)
 
     def summarize_netarch(self, pNet):
         # input_size : (C, H, W)
@@ -74,7 +91,7 @@ class logger(object):
         info_table.append(["#conv_layers", conv_num])
         info_table.append(["#fc_layers", fc_num])
 
-        self.log_the_table(pNet._get_name() , info_table)
+        self.log_the_table("Net-" + pNet._get_name() , info_table)
     
     def fetch_netweights(self, pNet):
         para_Lst = []
@@ -117,3 +134,9 @@ if __name__ == "__main__":
     gm_net = info_m.Generator(10 , 10, 2)
     gm_logger.summarize_netarch(gm_net)
 
+    for i in range(10):
+        gm_logger.log_scalars_singleline([
+            ["epoch", i], 
+            ["time_cost(min)", 0.2], 
+            ["avg_loss", torch.rand(1).item()], 
+        ])
