@@ -35,18 +35,18 @@ class train_config(ut_cfg.config):
         localtime = time.localtime(time.time())
         self.path_save_mdid = "dcmnist" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
+        self.training_epoch_amount = 150
         self.save_epoch_begin = 50
         self.save_epoch_interval = 20
 
         self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "dcmnist_epoch_loss_log.txt"), 'a+')
         self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
 
-        self.height_in = 28
-        self.width_in = 28
+        self.netin_size = 28
         self.latent_num = 16
 
         self.method_init ="norm"  #"preTrain" #"kaming" #"xavier" # "norm"
-        self.training_epoch_amount = 150
+        
         
 
         self.dtroot = os.path.join(ROOT, "datasets")
@@ -135,8 +135,8 @@ class train_config(ut_cfg.config):
             data_Dic, epoch)
 
     def validate(self, pnetD, pnetG, p_epoch):
-        pnetD = pnetD.eval()
-        pnetG = pnetG.eval()
+        pnetD.eval()
+        pnetG.eval()
         # use the fixed noise to test the GAN performance
         w_layout = 8
         imgF_Tsor_bacth_i = pnetG(self.fixed_noise)
@@ -169,7 +169,7 @@ if __name__ == "__main__":
         batch_size= gm_cfg.ld_batchsize,
         shuffle= True,
         num_workers= gm_cfg.ld_workers
-    ) # 1875 * 32
+    )
 
     gm_real_label = 1
     gm_real_confidence = 0.9
@@ -228,8 +228,8 @@ if __name__ == "__main__":
         for epoch_i in range(gm_cfg.training_epoch_amount):
             start=time.time()
             # single epoch
-            gm_netD = gm_netD.train()
-            gm_netG = gm_netG.train()
+            gm_netD.train()
+            gm_netG.train()
             for iter_idx, (img_Tsor_bacth_i, _ ) in enumerate(gm_trainloader):
                 ############################
                 # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))

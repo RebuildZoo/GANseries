@@ -58,21 +58,21 @@ class train_config(ut_cfg.config):
         localtime = time.localtime(time.time())
         self.path_save_mdid = "infomnist_z10unspv_MSE" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
+        self.training_epoch_amount = 100
         self.save_epoch_begin = 20
         self.save_epoch_interval = 10
 
         self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z10unspv_MSE_epoch_loss_log.txt"), 'a+')
         self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
 
-        self.height_in = 28
-        self.width_in = 28
+        self.netin_size = 28
     
         self.latent_dim = 10 # z dim
         self.class_num = 10 # class: one-hot discrete
         self.code_dim = 2  # continuous
         self.test_edge = 2.0 # [-test_edge, ]
         self.method_init ="norm"  #"preTrain" #"kaming" #"xavier" # "norm"
-        self.training_epoch_amount = 100
+        
         
         self.dtroot = os.path.join(ROOT, "datasets")
 

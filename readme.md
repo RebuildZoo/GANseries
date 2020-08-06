@@ -19,6 +19,7 @@ Existing deployment progress (table of contents):
 ## 01. DCGAN on MNIST
 > Q: How to make GAN more stable? 
 <br/>A: FC to Conv. 
+
 ### Background
 DCGAN is the first GAN using transposed convolution as **G** and convolution as **D**. 
 ![image](assets/dcgan_pipeline.png)
