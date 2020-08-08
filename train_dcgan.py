@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,87 +13,53 @@ import sys
 ROOT = os.getcwd()
 sys.path.append(ROOT)
 
-
 import arch.dcgan_minist as dc_m
 import loaders.ministLoader as mnstld 
 import custom_utils.config as ut_cfg 
 import custom_utils.initializer as ut_init
-
-try:
-    from torch.utils.tensorboard import SummaryWriter
-except ImportError:
-    print("please pip install tensorboard==2.0.2")
-'''
-tensorboard --logdir outputs --port 8890
-'''
+import custom_utils.logger as ut_log 
 
 class train_config(ut_cfg.config):
     def __init__(self):
-        super(train_config, self).__init__(pBs = 64, pWn = 2, p_force_cpu = False)
-        self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "dcgan"))
-        localtime = time.localtime(time.time())
-        self.path_save_mdid = "dcmnist" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
+        super(train_config, self).__init__(saving_id = "dcgan_forMnist",
+            pBs = 64, pWn = 2, p_force_cpu = False)
 
         self.training_epoch_amount = 150
         self.save_epoch_begin = 50
         self.save_epoch_interval = 20
-
-        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "dcmnist_epoch_loss_log.txt"), 'a+')
-        self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
-
+        self.valid_epoch_interval = 3
         self.netin_size = 28
         self.latent_num = 16
 
-        self.method_init ="norm"  #"preTrain" #"kaming" #"xavier" # "norm"
-        
-        
+        self.method_init ="norm" # "xavier", "kaiming", "preTrain", "norm"
+        # self.preTrain_model_path = pretrain_path
 
-        self.dtroot = os.path.join(ROOT, "datasets")
-
+        self.dataset_root_path = os.path.join(ROOT, "datasets") # load the data
+        self.log_root_path = self.check_path_valid(os.path.join(ROOT, "outputs", "dcgan")) # save logs and checkpoints. 
+        self.checkpoints_root_path = self.check_path_valid(os.path.join(self.log_root_path, self.saving_id + "_checkpoints"))
         self.opt_baseLr_D = 5e-4
         self.opt_baseLr_G = 2e-4
         self.opt_beta1 = 0.5
         self.opt_weightdecay = 3e-6
-        
-        
-        '''
-        DCGAN: 
-        suggested learning rate of 0.001, to be too high, using 0.0002 instead. 
-        the momentum term β1 at the suggested value of 0.9 resulted in training oscillation and instability while reducing it to 0.5 helped stabilize training.
-        '''
 
-        # synchronize the rand seed
         self.rand_seed = 2673 # random.randint(1, 10000)
         print("Random Seed: ", self.rand_seed)
         random.seed(self.rand_seed)
         torch.manual_seed(self.rand_seed)
         self.fixed_noise = self.noise_generate_func(self.ld_batchsize, self.latent_num)
-
+    
     def noise_generate_func(self, *size):
         # torch.randn N(0, 1) ; torch.rand U(0, 1)
         # U(-1 ,1)
         return torch.rand(*size).to(self.device)* 2 - 1 # to (-1, 1)
-
-    def init_net(self, pNet):
-        if self.method_init == "xavier":
-            ut_init.init_xavier(pNet)
-        elif self.method_init == "kaiming":
-            ut_init.init_kaiming(pNet)
-        elif self.method_init == "norm":
-            ut_init.init_norm(pNet)
-        elif self.method_init == "preTrain":
-            assert self.preTrain_model_path is not None, "weight path ungiven"
-            pNet.load_state_dict(torch.load(self.preTrain_model_path))
-
-        pNet.to(self.device).train()
-
+    
     def create_dataset(self, istrain):
         if istrain:
-            imgUbyte_absfilename = r"datasets\MNIST\train-images-idx3-ubyte.gz"
-            labelUbyte_absfilename = r"datasets\MNIST\train-labels-idx1-ubyte.gz"
+            imgUbyte_absfilename = os.path.join(self.dataset_root_path, r"MNIST\train-images-idx3-ubyte.gz")
+            labelUbyte_absfilename = os.path.join(self.dataset_root_path, r"MNIST\train-labels-idx1-ubyte.gz")
         else:
-            imgUbyte_absfilename = r"datasets\MNIST\t10k-images-idx3-ubyte.gz"
-            labelUbyte_absfilename = r"datasets\MNIST\t10k-labels-idx1-ubyte.gz"
+            imgUbyte_absfilename = os.path.join(self.dataset_root_path, r"MNIST\t10k-images-idx3-ubyte.gz")
+            labelUbyte_absfilename = os.path.join(self.dataset_root_path, r"MNIST\t10k-labels-idx1-ubyte.gz")
         
         basic_transform = transforms.Compose([
                 # transforms.ToPILImage(), 
@@ -106,35 +71,8 @@ class train_config(ut_cfg.config):
         q_dataset = mnstld.minist_Loader(imgUbyte_absfilename, labelUbyte_absfilename, basic_transform)
 
         return q_dataset 
-
-    def name_save_model(self, save_mode, epochX = None):
-        model_type = save_mode.split("_")[1] # netD / netG
-        model_filename = self.path_save_mdid + model_type
-        
-        if "processing" in save_mode:
-            assert epochX is not None, "miss the epoch info" 
-            model_filename += "_%03d"%(epochX) + ".pth"
-        elif "ending" in save_mode:
-            model_filename += "_%03d"%(self.training_epoch_amount) + ".pth"
-        elif "interrupt" in save_mode:
-            model_filename += "_interrupt"+ ".pth"
-        assert os.path.splitext(model_filename)[-1] == ".pth"
-        q_abs_path = os.path.join(self.path_save_mdroot, model_filename)
-        return q_abs_path
-
-    def log_in_file(self, *print_paras):
-        for para_i in print_paras:
-            print(para_i, end= "")
-            print(para_i, end= "", file = self.log_epoch_txt)
-        print("")
-        print("", file = self.log_epoch_txt)
     
-    def log_in_board(self, chartname,data_Dic, epoch):
-        # for key_i, val_i in data_Dic:
-        self.writer.add_scalars(chartname, 
-            data_Dic, epoch)
-
-    def validate(self, pnetD, pnetG, p_epoch):
+    def validate(self, pnetD, pnetG, p_log, p_epoch):
         pnetD.eval()
         pnetG.eval()
         # use the fixed noise to test the GAN performance
@@ -143,27 +81,19 @@ class train_config(ut_cfg.config):
         # imgF_Tsor_bacth_i = imgF_Tsor_bacth_i/2 + 0.5
         view_x_Tsor = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth_i, nrow= w_layout)
 
-        self.writer.add_image("Generator Outputs", view_x_Tsor, p_epoch)
+        p_log.board_imgs_singlefig("Generator Outputs", view_x_Tsor, p_epoch)
 
-        g_weights = self.distribute_arch_para(pnetG)
-        d_weights = self.distribute_arch_para(pnetD)
-
-        self.writer.add_histogram("G weights Dist", g_weights, p_epoch)
-        self.writer.add_histogram("D weights Dist", d_weights, p_epoch)
-        # judge_Tsor_batch_i = pnetD(imgF_Tsor_bacth_i)
-
-        # judge_Arr = np.zeros(gm_cfg.ld_batchsize)
-        # for idex, ele_i in enumerate(judge_Tsor_batch_i):
-        #     judge_Arr[idex] = round(ele_i.item(), 3)
-        # print("[validate] epoch %d  D's judgement:\n"%(p_epoch), np.reshape(judge_Arr, (-1, w_layout)))
-
+        gm_log.board_net_weightdist("D weights Dist", pnetD , p_epoch)
+        gm_log.board_net_weightdist("G weights Dist", pnetG , p_epoch)
         
-
 if __name__ == "__main__":
+    
+    gm_real_label = 1
+    gm_real_confidence = 0.9
+    gm_fake_label = 0
 
     gm_cfg = train_config()
-    
-    # prepare data
+    gm_log = ut_log.logger(gm_cfg.log_root_path, gm_cfg.saving_id)
     gm_trainloader = torch.utils.data.DataLoader(
         dataset = gm_cfg.create_dataset(istrain = True), 
         batch_size= gm_cfg.ld_batchsize,
@@ -171,16 +101,11 @@ if __name__ == "__main__":
         num_workers= gm_cfg.ld_workers
     )
 
-    gm_real_label = 1
-    gm_real_confidence = 0.9
-    gm_fake_label = 0
-
-    # prepare nets
     gm_netG = dc_m.Generator(gm_cfg.latent_num)
     gm_netD = dc_m.Discriminator()
-    
-    gm_cfg.init_net(gm_netG)
-    gm_cfg.init_net(gm_netD)
+
+    gm_cfg.init_net(gm_netG, gm_cfg.method_init, istrain=True)
+    gm_cfg.init_net(gm_netD, gm_cfg.method_init, istrain=True)
 
     # optimizer & scheduler
     gm_optimizerG = optim.Adam(
@@ -217,19 +142,19 @@ if __name__ == "__main__":
 
     lossD_an_epoch_Lst = []
     lossG_an_epoch_Lst = []
+
     try:
+        gm_log.summarize_netarch(gm_netD)
+        gm_log.summarize_netarch(gm_netG)
+        gm_log.summarize_config(gm_cfg)
         print("Train_Begin".center(40, "*"))
-        print("Generator:", end="")
-        gm_cfg.check_arch_para(gm_netG)
-        print("Discriminator:", end="")
-        gm_cfg.check_arch_para(gm_netD)
-        gm_cfg.log_in_file("net_id = ", gm_cfg.path_save_mdid, ", batchsize = ", gm_cfg.ld_batchsize, ", workers = ", gm_cfg.ld_workers)
-        gm_cfg.log_in_file("criterion_use: ",gm_criterion, ", init: ", gm_cfg.method_init)
+
         for epoch_i in range(gm_cfg.training_epoch_amount):
             start=time.time()
             # single epoch
             gm_netD.train()
             gm_netG.train()
+
             for iter_idx, (img_Tsor_bacth_i, _ ) in enumerate(gm_trainloader):
                 ############################
                 # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
@@ -290,7 +215,6 @@ if __name__ == "__main__":
                 lossG_an_epoch_Lst.append(lossG.item())
 
                 gm_optimizerG.step()
-            
             # end an epoch
             delta_t = (time.time()- start)/60
             avgD_loss = sum(lossD_an_epoch_Lst)/len(lossD_an_epoch_Lst)
@@ -299,62 +223,42 @@ if __name__ == "__main__":
             gm_schedulerD.step(avgD_loss)
             gm_schedulerG.step(avgG_loss)
 
-            gm_cfg.log_in_board( "dcmnist loss", 
+            gm_log.board_scalars_singlechart("dcmnist loss", 
                 {"d_loss": avgD_loss, 
                 "g_loss": avgG_loss, 
-                },  epoch_i
-            )
-
-            gm_cfg.log_in_file("epoch = %03d, time_cost(min)= %2.2f, dcGAN_d_loss = %2.5f, dcGAN_g_loss = %2.5f"
-                %(epoch_i, delta_t, avgD_loss, avgG_loss)
-            )
+                },epoch_i
+                )
             
-            # validate the accuracy
-            gm_cfg.validate(gm_netD, gm_netG, epoch_i)
+            gm_log.log_scalars_singleline([
+                    ["epoch", epoch_i], 
+                    ["time_cost(min)", delta_t], 
+                    ["avgD_loss", avgD_loss], 
+                    ["avgG_loss", avgG_loss], 
+                ])
+            
+            if epoch_i % gm_cfg.valid_epoch_interval == 0:
+                gm_cfg.validate(gm_netD, gm_netG, gm_log, epoch_i)
 
             lossD_an_epoch_Lst.clear()
             lossG_an_epoch_Lst.clear()
 
             if (epoch_i >gm_cfg.save_epoch_begin and epoch_i %gm_cfg.save_epoch_interval == 1):
-                # save weight at regular interval
+                # save weight at checkpoint = save_epoch_begin + t * save_epoch_interval
                 torch.save(obj = gm_netD.state_dict(), 
-                    f = gm_cfg.name_save_model("processing_netD", epoch_i))
+                    f = gm_cfg.name_save_model("processing", gm_netD, epoch_i))
                 torch.save(obj = gm_netG.state_dict(), 
-                    f = gm_cfg.name_save_model("processing_netG", epoch_i))
-                
-            gm_cfg.log_epoch_txt.flush()
-        
-        # end the train process(training_epoch_amount times to reuse the data)
-        torch.save(obj = gm_netD.state_dict(),  f = gm_cfg.name_save_model("ending_netD"))
-        torch.save(obj = gm_netG.state_dict(),  f = gm_cfg.name_save_model("ending_netG"))
-        gm_cfg.log_epoch_txt.close()
-        gm_cfg.writer.close()
-    
-    except KeyboardInterrupt:
-        print("Save the Inter.pth".center(60, "*"))
-        torch.save(obj = gm_netD.state_dict(), f = gm_cfg.name_save_model("interrupt_netD"))
-        torch.save(obj = gm_netG.state_dict(), f = gm_cfg.name_save_model("interrupt_netG"))
+                    f = gm_cfg.name_save_model("processing", gm_netG, epoch_i))
+            
+        # end the train process
+        torch.save(obj = gm_netD.state_dict(),  f = gm_cfg.name_save_model("ending", gm_netD, gm_cfg.training_epoch_amount))
+        torch.save(obj = gm_netG.state_dict(),  f = gm_cfg.name_save_model("ending", gm_netG, gm_cfg.training_epoch_amount))
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    except KeyboardInterrupt :
+        print("get Keyboard error, Save the Inter.pth")
+        torch.save(obj = gm_netD.state_dict(), f = gm_cfg.name_save_model("interrupt", gm_netD))
+        torch.save(obj = gm_netG.state_dict(), f = gm_cfg.name_save_model("interrupt", gm_netG))
 
 
 

@@ -6,7 +6,9 @@ import arch.infogan_mnist as info_m
 try:
     from terminaltables import AsciiTable
 except ImportError: 
-    print("please pip install terminaltables")
+    print("pip install terminaltables...")
+    os.system("pip install terminaltables")
+    from terminaltables import AsciiTable
 
 import torch 
 import torch.nn as nn 
@@ -26,6 +28,10 @@ class logger(object):
         logfile_path = os.path.join(log_dir, tag + "_" + date + "_" +"log.txt")
         self.txt_writer = open(logfile_path, 'a+')
         self.board_writer = SummaryWriter(log_dir=os.path.join(log_dir, "board"))
+
+    def __del__(self):
+        self.txt_writer.close()
+        self.board_writer.close()
 
     def log_the_str(self, *print_paras):
         for para_i in print_paras:
@@ -57,13 +63,12 @@ class logger(object):
 
     def summarize_config(self, pConfig):
         info_table = [['item', 'detail']]
-        info_table.append(["training id", pConfig.path_save_mdid])
+        info_table.append(["config id", pConfig.saving_id])
         info_table.append(["# epochs", pConfig.training_epoch_amount])
         info_table.append(["# checkpoint begin", pConfig.save_epoch_begin])
         info_table.append(["batch size", pConfig.ld_batchsize])
-        info_table.append(["#workers ", pConfig.ld_ld_workers])
+        info_table.append(["#workers ", pConfig.ld_workers])
         info_table.append(["init mode", pConfig.method_init])
-        info_table.append(["base Lr", pConfig.opt_baseLr])
         info_table.append(["device", pConfig.device])
         
         self.log_the_table("config" , info_table)
@@ -99,12 +104,12 @@ class logger(object):
             para_Lst.append(para_i.reshape(-1))
         return torch.cat(para_Lst)
 
-    def board_net_weightdist(self, pNet, step_i):
+    def board_net_weightdist(self, chart_tag, pNet, step_i):
         '''
         view the distribution of the net weights in tfboard. 
         '''
         weights = self.fetch_netweights(pNet)
-        self.writer.add_histogram("G weights Dist", weights, step_i)
+        self.board_writer.add_histogram(chart_tag, weights, step_i)
 
     def board_scalars_singlechart(self, chart_tag, data_dic, step_i):
         self.board_writer.add_scalars(chart_tag, data_dic, step_i)

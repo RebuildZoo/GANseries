@@ -1,21 +1,24 @@
 import os
 import time
 import torch
-
+try : 
+    import custom_utils.initializer as ut_init
+except: 
+    import initializer as ut_init
 
 class config(object):
-    def __init__(self, pBs, pWn, p_force_cpu):
+    def __init__(self, saving_id: str, pBs : int, pWn : int, p_force_cpu : bool):
         # device & its name
+        self.saving_id = saving_id
         self.device = self.select_device(p_force_cpu)
         
+        # path 
+        self.checkpoints_root_path = None
+
         # loader
         self.ld_batchsize = pBs #8
         self.ld_workers = pWn #2
-
-        self.method_criterion = None
-
-        # None for inherint to rewrite
-
+        
 
     def select_device(self, force_cpu = False):
         '''
@@ -50,27 +53,41 @@ class config(object):
 
         print('')  # skip a line
         return device
-    
-    def check_arch_para(self, pNet):
-        para_amount = 0
-        for para_i in pNet.parameters():
-            # para_i is a torch.nn.parameter.Parameter, grad is True by default. 
-            # print(para_i.shape, para_i.requires_grad)
-            para_amount += para_i.numel()
-        print("[net info] para_amount=%d"%para_amount)
 
-    def distribute_arch_para(self, pNet):
-        para_Lst = []
-        for para_i in pNet.parameters():
-            para_Lst.append(para_i.reshape(-1))
-        return torch.cat(para_Lst)
-
-    def check_path_valid(self, path)->str:
-        assert os.path.isdir(path) or os.path.isfile(path), "invalid path in " + path
+    def check_path_valid(self, path) -> str:
+        os.makedirs(path, exist_ok = True)
         return(path)
     
+    def name_save_model(self, save_mode, pNet, epochX = None) -> str:
+        model_filename = self.saving_id + "-" + pNet._get_name()
+        
+        if "processing" in save_mode or "ending" in save_mode:
+            assert epochX is not None, "miss the epoch info" 
+            model_filename += "_%03d"%(epochX) + ".pth"
+        elif "interrupt" in save_mode:
+            model_filename += "_interrupt"+ ".pth"
+        assert os.path.splitext(model_filename)[-1] == ".pth"
+        q_abs_path = os.path.join(self.checkpoints_root_path, model_filename)
+        return q_abs_path
 
+    def init_net(self, pNet, init_mode, istrain, pretrain_path = None) -> None:
+        if init_mode == "xavier":
+            ut_init.init_xavier(pNet)
+        elif init_mode == "kaiming":
+            ut_init.init_kaiming(pNet)
+        elif init_mode == "norm":
+            ut_init.init_norm(pNet)
+        elif init_mode == "preTrain":
+            assert pretrain_path is not None, "weight path ungiven"
+            if ".weight" in self.path_weight_file:
+                pNet.load_darknet_weights(self.path_weight_file)
+            elif ".pth" in self.path_weight_file:
+                pNet.load_state_dict(torch.load(self.path_weight_file))
+
+        pNet.to(self.device)
+        if istrain : pNet.train()
+        else : pNet.eval()
 
 if __name__ == '__main__':
-    train_para = train_hyper_para_Keeper()
+    train_para = config()
     print(train_para.device)
