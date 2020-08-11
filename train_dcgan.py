@@ -21,13 +21,14 @@ import custom_utils.logger as ut_log
 
 class train_config(ut_cfg.config):
     def __init__(self):
-        super(train_config, self).__init__(saving_id = "dcgan_forMnist",
+        super(train_config, self).__init__(saving_id = "dcgan_mnist_BCE",
             pBs = 64, pWn = 2, p_force_cpu = False)
 
-        self.training_epoch_amount = 150
-        self.save_epoch_begin = 50
+        self.total_epoch = 100
+        self.save_epoch_begin = 0
         self.save_epoch_interval = 20
-        self.valid_epoch_interval = 3
+        self.validate_epoch_interval = 3
+
         self.netin_size = 28
         self.latent_num = 16
 
@@ -37,6 +38,7 @@ class train_config(ut_cfg.config):
         self.dataset_root_path = os.path.join(ROOT, "datasets") # load the data
         self.log_root_path = self.check_path_valid(os.path.join(ROOT, "outputs", "dcgan")) # save logs and checkpoints. 
         self.checkpoints_root_path = self.check_path_valid(os.path.join(self.log_root_path, self.saving_id + "_checkpoints"))
+        
         self.opt_baseLr_D = 5e-4
         self.opt_baseLr_G = 2e-4
         self.opt_beta1 = 0.5
@@ -149,7 +151,7 @@ if __name__ == "__main__":
         gm_log.summarize_config(gm_cfg)
         print("Train_Begin".center(40, "*"))
 
-        for epoch_i in range(gm_cfg.training_epoch_amount):
+        for epoch_i in range(gm_cfg.total_epoch):
             start=time.time()
             # single epoch
             gm_netD.train()
@@ -223,7 +225,7 @@ if __name__ == "__main__":
             gm_schedulerD.step(avgD_loss)
             gm_schedulerG.step(avgG_loss)
 
-            gm_log.board_scalars_singlechart("dcmnist loss", 
+            gm_log.board_scalars_singlechart("dcmnist_loss", 
                 {"d_loss": avgD_loss, 
                 "g_loss": avgG_loss, 
                 },epoch_i
@@ -232,11 +234,11 @@ if __name__ == "__main__":
             gm_log.log_scalars_singleline([
                     ["epoch", epoch_i], 
                     ["time_cost(min)", delta_t], 
-                    ["avgD_loss", avgD_loss], 
-                    ["avgG_loss", avgG_loss], 
+                    ["d_loss", avgD_loss], 
+                    ["g_loss", avgG_loss], 
                 ])
             
-            if epoch_i % gm_cfg.valid_epoch_interval == 0:
+            if epoch_i % gm_cfg.validate_epoch_interval == 0:
                 gm_cfg.validate(gm_netD, gm_netG, gm_log, epoch_i)
 
             lossD_an_epoch_Lst.clear()
@@ -250,8 +252,8 @@ if __name__ == "__main__":
                     f = gm_cfg.name_save_model("processing", gm_netG, epoch_i))
             
         # end the train process
-        torch.save(obj = gm_netD.state_dict(),  f = gm_cfg.name_save_model("ending", gm_netD, gm_cfg.training_epoch_amount))
-        torch.save(obj = gm_netG.state_dict(),  f = gm_cfg.name_save_model("ending", gm_netG, gm_cfg.training_epoch_amount))
+        torch.save(obj = gm_netD.state_dict(),  f = gm_cfg.name_save_model("ending", gm_netD, gm_cfg.total_epoch))
+        torch.save(obj = gm_netG.state_dict(),  f = gm_cfg.name_save_model("ending", gm_netG, gm_cfg.total_epoch))
 
 
 

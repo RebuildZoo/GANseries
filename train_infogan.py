@@ -17,14 +17,7 @@ import arch.infogan_mnist as info_m
 import loaders.ministLoader as mnstld 
 import custom_utils.config as ut_cfg 
 import custom_utils.initializer as ut_init
-
-try:
-    from torch.utils.tensorboard import SummaryWriter
-except ImportError:
-    print("please pip install tensorboard==2.0.2")
-'''
-tensorboard --logdir outputs --port 8890
-'''
+import custom_utils.logger as ut_log 
 
 class NormalNLLLoss(nn.Module):
     """
@@ -49,32 +42,29 @@ class NormalNLLLoss(nn.Module):
         elif self.reduction == "sum":
             nll = logli.sum()
         return nll
-
-
+    
 class train_config(ut_cfg.config):
     def __init__(self):
-        super(train_config, self).__init__(pBs = 64, pWn = 2, p_force_cpu = False)
-        self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "infogan"))
-        localtime = time.localtime(time.time())
-        self.path_save_mdid = "infomnist_z10unspv_MSE" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
-
-        self.training_epoch_amount = 100
-        self.save_epoch_begin = 20
+        super(train_config, self).__init__(saving_id = "infogan_mnist_spv_BCEwMSE",
+                pBs = 64, pWn = 2, p_force_cpu = False)
+        
+        self.total_epoch = 100
+        self.save_epoch_begin = 30
         self.save_epoch_interval = 10
-
-        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z10unspv_MSE_epoch_loss_log.txt"), 'a+')
-        self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
+        self.validate_epoch_interval = 3
 
         self.netin_size = 28
-    
         self.latent_dim = 10 # z dim
         self.class_num = 10 # class: one-hot discrete
         self.code_dim = 2  # continuous
         self.test_edge = 2.0 # [-test_edge, ]
-        self.method_init ="norm"  #"preTrain" #"kaming" #"xavier" # "norm"
         
-        
-        self.dtroot = os.path.join(ROOT, "datasets")
+        self.method_init ="norm" # "xavier", "kaiming", "preTrain", "norm"
+        # self.preTrain_model_path = pretrain_path
+
+        self.dataset_root_path = os.path.join(ROOT, "datasets") # load the data
+        self.log_root_path = self.check_path_valid(os.path.join(ROOT, "outputs", "infogan")) # save logs and checkpoints. 
+        self.checkpoints_root_path = self.check_path_valid(os.path.join(self.log_root_path, self.saving_id + "checkpoints"))
 
         self.opt_baseLr_D = 5e-4
         self.opt_baseLr_G = 2e-4
@@ -87,7 +77,7 @@ class train_config(ut_cfg.config):
         print("Random Seed: ", self.rand_seed)
         random.seed(self.rand_seed)
         torch.manual_seed(self.rand_seed)
-        
+
         # design the vali instance 
         fixed_z = self.noise_generate_func(self.class_num**2, self.latent_dim) # (100, 62)
         fixed_discrete, _ = self.label_generate_func("fixed", self.class_num**2)
@@ -100,7 +90,6 @@ class train_config(ut_cfg.config):
         
         self.combined_noise1 = torch.cat([fixed_z, fixed_discrete, fixed_continuous1],dim = -1)
         self.combined_noise2 = torch.cat([fixed_z, fixed_discrete, fixed_continuous2],dim = -1)
-
 
     def noise_generate_func(self, *size):
         # torch.randn N(0, 1) ; torch.rand U(0, 1)
@@ -118,27 +107,14 @@ class train_config(ut_cfg.config):
         onehot_Tensor = torch.zeros(figure_Tsor.shape[0], self.class_num).scatter_(dim= 1, index = figure_Tsor, value = 1.0).to(self.device) # (BS, 10)
 
         return onehot_Tensor, figure_Tsor.view(-1).to(self.device)
-
-    def init_net(self, pNet):
-        if self.method_init == "xavier":
-            ut_init.init_xavier(pNet)
-        elif self.method_init == "kaiming":
-            ut_init.init_kaiming(pNet)
-        elif self.method_init == "norm":
-            ut_init.init_norm(pNet)
-        elif self.method_init == "preTrain":
-            assert self.preTrain_model_path is not None, "weight path ungiven"
-            pNet.load_state_dict(torch.load(self.preTrain_model_path))
-
-        pNet.to(self.device).train()
     
     def create_dataset(self, istrain):
         if istrain:
-            imgUbyte_absfilename = r"datasets\MNIST\train-images-idx3-ubyte.gz"
-            labelUbyte_absfilename = r"datasets\MNIST\train-labels-idx1-ubyte.gz"
+            imgUbyte_absfilename = os.path.join(self.dataset_root_path, r"MNIST\train-images-idx3-ubyte.gz")
+            labelUbyte_absfilename = os.path.join(self.dataset_root_path, r"MNIST\train-labels-idx1-ubyte.gz")
         else:
-            imgUbyte_absfilename = r"datasets\MNIST\t10k-images-idx3-ubyte.gz"
-            labelUbyte_absfilename = r"datasets\MNIST\t10k-labels-idx1-ubyte.gz"
+            imgUbyte_absfilename = os.path.join(self.dataset_root_path, r"MNIST\t10k-images-idx3-ubyte.gz")
+            labelUbyte_absfilename = os.path.join(self.dataset_root_path, r"MNIST\t10k-labels-idx1-ubyte.gz")
         
         basic_transform = transforms.Compose([
                 # transforms.ToPILImage(), 
@@ -151,35 +127,9 @@ class train_config(ut_cfg.config):
 
         return q_dataset 
     
-    def name_save_model(self, save_mode, epochX = None):
-        model_type = save_mode.split("_")[1] # netD / netG
-        model_filename = self.path_save_mdid + model_type
-        
-        if "processing" in save_mode:
-            assert epochX is not None, "miss the epoch info" 
-            model_filename += "_%03d"%(epochX) + ".pth"
-        elif "ending" in save_mode:
-            model_filename += "_%03d"%(self.training_epoch_amount) + ".pth"
-        elif "interrupt" in save_mode:
-            model_filename += "_interrupt"+ ".pth"
-        assert os.path.splitext(model_filename)[-1] == ".pth"
-        q_abs_path = os.path.join(self.path_save_mdroot, model_filename)
-        return q_abs_path
-
-    def log_in_file(self, *print_paras):
-        for para_i in print_paras:
-            print(para_i, end= "")
-            print(para_i, end= "", file = self.log_epoch_txt)
-        print("")
-        print("", file = self.log_epoch_txt)
-    
-    def log_in_board(self, chartname,data_Dic, epoch):
-        # for key_i, val_i in data_Dic:
-        self.writer.add_scalars(chartname, 
-            data_Dic, epoch)
-
-    def validate(self, pnetD, pnetG, p_epoch):
-        
+    def validate(self, pnetD, pnetG, p_log, p_epoch):
+        pnetD.eval()
+        pnetG.eval()
         # use the fixed noise to test the GAN performance
         w_layout = self.class_num
         imgF_Tsor_bacth1 = pnetG(self.combined_noise1)
@@ -188,21 +138,23 @@ class train_config(ut_cfg.config):
         view_x_Tsor1 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth1, nrow= w_layout)
         view_x_Tsor2 = torchvision.utils.make_grid(tensor = imgF_Tsor_bacth2, nrow= w_layout)
 
-        self.writer.add_image("infomnist_z10unspv_MSE_ctndim0", view_x_Tsor1, p_epoch)
-        self.writer.add_image("infomnist_z10unspv_MSE_ctndim1", view_x_Tsor2, p_epoch)
+        p_log.board_imgs_singlefig(self.saving_id + "_ctndim0", view_x_Tsor1, p_epoch)
+        p_log.board_imgs_singlefig(self.saving_id + "_ctndim1", view_x_Tsor2, p_epoch)
 
-        # judge_Tsor_batch_i = pnetD(imgF_batch_i)
-
-        # judge_Arr = np.zeros(gm_cfg.ld_batchsize)
-        # for idex, ele_i in enumerate(judge_Tsor_batch_i):
-        #     judge_Arr[idex] = round(ele_i.item(), 3)
-        # print("[validate] epoch %d  D's judgement:\n"%(p_epoch), np.reshape(judge_Arr, (-1, w_layout)))
-
+        gm_log.board_net_weightdist(self.saving_id +"d_weights", pnetD , p_epoch)
+        gm_log.board_net_weightdist(self.saving_id +"g_weights", pnetG , p_epoch)
     
+
 if __name__ == "__main__":
+    
+    gm_real_label = 1
+    gm_real_confidence = 0.9
+    gm_fake_label = 0
+    
+    gm_lambda_con = 0.1 # Loss weights
 
     gm_cfg = train_config()
-    
+    gm_log = ut_log.logger(gm_cfg.log_root_path, gm_cfg.saving_id)
     # prepare data
     gm_trainloader = torch.utils.data.DataLoader(
         dataset = gm_cfg.create_dataset(istrain = True), 
@@ -211,19 +163,13 @@ if __name__ == "__main__":
         num_workers= gm_cfg.ld_workers
     ) # 1875 * 32
 
-    gm_real_label = 1
-    gm_real_confidence = 0.9
-    gm_fake_label = 0
-    
-    gm_lambda_con = 0.1 # # Loss weights
-
     # prepare nets
     gm_netG = info_m.Generator(gm_cfg.latent_dim, gm_cfg.class_num, gm_cfg.code_dim)
     gm_netD = info_m.Discriminator_wQ(gm_cfg.class_num, gm_cfg.code_dim)
     
-    gm_cfg.init_net(gm_netG)
-    gm_cfg.init_net(gm_netD)
-
+    gm_cfg.init_net(gm_netG, gm_cfg.method_init, istrain=True)
+    gm_cfg.init_net(gm_netD, gm_cfg.method_init, istrain=True)
+    
     # Optimizers
     gm_optimizerG = optim.Adam(
         params = gm_netG.parameters(),
@@ -272,23 +218,23 @@ if __name__ == "__main__":
     adversarial_criterion = nn.BCELoss()
     discrete_criterion = nn.CrossEntropyLoss()
     continuous_criterion = nn.MSELoss() # NormalNLLLoss() # 
-    nn.NLLLoss()
     gm_criterion = [adversarial_criterion, discrete_criterion, continuous_criterion]
     lossD_an_epoch_Lst = []
     lossG_an_epoch_Lst = []
     lossINFO_an_epoch_Lst = []
 
     try:
+        gm_log.summarize_netarch(gm_netD)
+        gm_log.summarize_netarch(gm_netG)
+        gm_log.summarize_config(gm_cfg)
         print("Train_Begin".center(40, "*"))
-        print("Generator:", end="")
-        gm_cfg.check_arch_para(gm_netG)
-        print("Discriminator:", end="")
-        gm_cfg.check_arch_para(gm_netD)
-        gm_cfg.log_in_file("net_id = ", gm_cfg.path_save_mdid, ", batchsize = ", gm_cfg.ld_batchsize, ", workers = ", gm_cfg.ld_workers)
-        gm_cfg.log_in_file("criterion_use: ",gm_criterion, ", init: ", gm_cfg.method_init)
-        for epoch_i in range(gm_cfg.training_epoch_amount):
+
+        for epoch_i in range(gm_cfg.total_epoch):
             start=time.time()
             # single epoch
+            gm_netD.train()
+            gm_netG.train()
+
             for iter_idx, (img_batch_i, label_batch_i) in enumerate(gm_trainloader):
                 BS = img_batch_i.shape[0]
                 imgR_batch_i = img_batch_i.to(gm_cfg.device)
@@ -351,12 +297,28 @@ if __name__ == "__main__":
 
                 _, predDsctR_batch_i, _ = gm_netD(imgR_batch_i) ### add novelly...
 
-                roiF_batch_i = imgF_batch_i[:, :, :, 7:21] # encourage x \in (7, 21)
+                # encourage ctn[0] to represent the thickness; 
+                roiF_batch_i = imgF_batch_i[..., 9:19] # encourage x \in (7, 21)
                 aux_thickness_batch_i = roiF_batch_i.reshape(BS, -1).sum(-1) / (roiF_batch_i.nelement()/BS)
-                aux_thickness_batch_i = aux_thickness_batch_i.detach()
-                continuous_batch_i[:,0] = (continuous_batch_i[:,0] + 1) * (aux_thickness_batch_i + 0.55) - 1
+                aux_thickness_batch_i = aux_thickness_batch_i.detach() # (BS)
                 
+                
+                # encourage ctn[1] to represent the rot;
+                # aux_rot_batch_i = torch.zeros(BS).to(gm_cfg.device)
+                # diag_line_amout = 0
+                # fliplr_imgF_batch_i = imgF_batch_i[..., [i for i in range(-1, -(imgF_batch_i.shape[-1]+1), -1)]]
+                # # fliplr_imgF_batch_i = torch.fliplr(imgF_batch_i) for torch1.6
+                # for off_j in range(-1, 2, 1):
+                #     aux_rot_batch_i += torch.diagonal(fliplr_imgF_batch_i, offset = off_j,  dim1 = -2, dim2 = -1).mean(dim= -1).squeeze(dim = -1)
+                #     diag_line_amout += 1
+                # aux_rot_batch_i = aux_rot_batch_i.detach() / diag_line_amout # get avg
+                
+                
+                continuous_batch_i[:,0] = (continuous_batch_i[:,0] + 1) * (aux_thickness_batch_i + 0.52)  - 1
+                # continuous_batch_i[:,1] = (continuous_batch_i[:,1] + 1) * (aux_rot_batch_i + 0.55)/ (aux_thickness_batch_i + 0.55) - 1
+
                 lossINFO =  discrete_criterion(predDsctF_batch_i, labelF_batch_i) + \
+                    discrete_criterion(predDsctR_batch_i, labelR_batch_i) + \
                     2 * gm_lambda_con * continuous_criterion(continuous_batch_i, predCtnFmu_batch_i)
                 # # discrete_criterion(predDsctR_batch_i, labelR_batch_i) + \
                 #
@@ -377,46 +339,42 @@ if __name__ == "__main__":
             gm_schedulerG.step(avgG_loss)
             gm_schedulerINFO.step(avgINFO_loss)
 
-            gm_cfg.log_in_board( "infomnist_z10unspv_MSE loss", 
+            gm_log.board_scalars_singlechart(gm_cfg.saving_id + "_loss", 
                 {"d_loss": avgD_loss, 
                 "g_loss": avgG_loss, 
                 "info_loss": avgINFO_loss, 
                 },  epoch_i
-            )
-
-            gm_cfg.log_in_file("epoch = %03d, time_cost(min)= %2.2f, d_loss = %2.5f, g_loss = %2.5f,info_loss = %2.5f"
-                %(epoch_i, delta_t, avgD_loss, avgG_loss, avgINFO_loss)
-            )
-
-            # validate the accuracy
-            gm_cfg.validate(gm_netD, gm_netG, epoch_i)
-
+                )
+            
+            gm_log.log_scalars_singleline([
+                    ["epoch", epoch_i], 
+                    ["time_cost(min)", delta_t], 
+                    ["d_loss", avgD_loss], 
+                    ["g_loss", avgG_loss], 
+                    ["info_loss",  avgINFO_loss]
+                ])
+            
+            if epoch_i % gm_cfg.validate_epoch_interval == 0:
+                gm_cfg.validate(gm_netD, gm_netG, gm_log, epoch_i)
+            
             lossD_an_epoch_Lst.clear()
             lossG_an_epoch_Lst.clear()
             lossINFO_an_epoch_Lst.clear()
 
             if (epoch_i >gm_cfg.save_epoch_begin and epoch_i %gm_cfg.save_epoch_interval == 1):
-                # save weight at regular interval
+                # save weight at checkpoint = save_epoch_begin + t * save_epoch_interval
                 torch.save(obj = gm_netD.state_dict(), 
-                    f = gm_cfg.name_save_model("processing_netD", epoch_i))
+                    f = gm_cfg.name_save_model("processing", gm_netD, epoch_i))
                 torch.save(obj = gm_netG.state_dict(), 
-                    f = gm_cfg.name_save_model("processing_netG", epoch_i))
-                
-            gm_cfg.log_epoch_txt.flush()
-        
-        # end the train process(training_epoch_amount times to reuse the data)
-        torch.save(obj = gm_netD.state_dict(),  f = gm_cfg.name_save_model("ending_netD"))
-        torch.save(obj = gm_netG.state_dict(),  f = gm_cfg.name_save_model("ending_netG"))
-        gm_cfg.log_epoch_txt.close()
-        gm_cfg.writer.close()
-    
-    except KeyboardInterrupt:
-        print("Save the Inter.pth".center(60, "*"))
-        torch.save(obj = gm_netD.state_dict(), f = gm_cfg.name_save_model("interrupt_netD"))
-        torch.save(obj = gm_netG.state_dict(), f = gm_cfg.name_save_model("interrupt_netG"))
+                    f = gm_cfg.name_save_model("processing", gm_netG, epoch_i))
+            
+        # end the train process
+        torch.save(obj = gm_netD.state_dict(),  f = gm_cfg.name_save_model("ending", gm_netD, gm_cfg.total_epoch))
+        torch.save(obj = gm_netG.state_dict(),  f = gm_cfg.name_save_model("ending", gm_netG, gm_cfg.total_epoch))
 
-
-
-
+    except KeyboardInterrupt :
+        print("get Keyboard error, Save the Inter.pth")
+        torch.save(obj = gm_netD.state_dict(), f = gm_cfg.name_save_model("interrupt", gm_netD))
+        torch.save(obj = gm_netG.state_dict(), f = gm_cfg.name_save_model("interrupt", gm_netG))
 
 

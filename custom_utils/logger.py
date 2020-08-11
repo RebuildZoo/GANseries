@@ -64,7 +64,7 @@ class logger(object):
     def summarize_config(self, pConfig):
         info_table = [['item', 'detail']]
         info_table.append(["config id", pConfig.saving_id])
-        info_table.append(["# epochs", pConfig.training_epoch_amount])
+        info_table.append(["# epochs", pConfig.total_epoch])
         info_table.append(["# checkpoint begin", pConfig.save_epoch_begin])
         info_table.append(["batch size", pConfig.ld_batchsize])
         info_table.append(["#workers ", pConfig.ld_workers])

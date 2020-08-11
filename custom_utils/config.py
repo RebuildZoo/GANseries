@@ -87,6 +87,13 @@ class config(object):
         pNet.to(self.device)
         if istrain : pNet.train()
         else : pNet.eval()
+    
+    def to_cpu(self, tensor):
+        if tensor.requires_grad: 
+            tensor = tensor.detach()
+        if tensor.is_cuda : 
+            tensor = tensor.cpu()
+        return tensor
 
 if __name__ == '__main__':
     train_para = config()

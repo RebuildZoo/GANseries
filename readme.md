@@ -112,8 +112,7 @@ Quality of generated results:
 Otherwise, the final discrete code may capture an arbitrary K = 10 cluster result,which may keep more than one handwritten digits in a single category.
 Despite all this, as demonstrated in paper, unsupervised training also achieved 5% error to classify MNIST after class-matching. 
 
-- By adding Thickness Guidance in one of the Continuous dim (no harm in CC[0])into the training process of Q, the value of CC [0] is related to random sampling and the thickness of figure in corresponding fake image, while the value of CC [1] only comes from random sampling of **U(- 1,1)**. In this way, CC [0] and CC [1] will be more **disentangled**. As shown in the 3rd group of experiments, CC [0] implies a more thickness dependent and linear relationship. 
-
+- By adding Thickness Guidance in one of the Continuous dim (no harm in CC[0])into the training process of Q, the value of CC [0] is related to random sampling and the thickness of figure in corresponding fake image, while the value of CC [1] only comes from random sampling of **U(- 1,1)**. In this way, CC [0] and CC [1] will be more **disentangled**. As shown in the 3rd group of experiments, CC [0] implies a more thickness dependent and linear relationship. Tips: The batch-size **affets** the final results. In this deployment, setting BS = 64 can be beter in the continuous code rep. 
 
 
 ### Limitations
