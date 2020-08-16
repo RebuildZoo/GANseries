@@ -2,7 +2,6 @@ import time
 import os 
 import sys 
 sys.path.append(os.getcwd())
-import arch.infogan_mnist as info_m
 try:
     from terminaltables import AsciiTable
 except ImportError: 
@@ -18,7 +17,7 @@ try:
 except ImportError:
     print("for torch1.4, please pip install tensorboard==2.0.2")
 '''
-tensorboard --logdir outputs --port 8890
+tensorboard --logdir board --port 8890
 '''
 
 class logger(object):
@@ -52,7 +51,7 @@ class logger(object):
             info_val = info_pair[1]
             if isinstance(info_val, float): 
                 info_val = str(round(info_val, 5))
-            elif isinstance(info_val, float):
+            elif isinstance(info_val, int):
                 info_val = "%03d"%(info_val)
             info_str = "= ".join([str(info_pair[0]), str(info_val)])
             if idx_i != len(info_table): 
@@ -69,7 +68,7 @@ class logger(object):
         info_table.append(["batch size", pConfig.ld_batchsize])
         info_table.append(["#workers ", pConfig.ld_workers])
         info_table.append(["init mode", pConfig.method_init])
-        info_table.append(["device", pConfig.device])
+        info_table.append(["device", pConfig.device_info])
         
         self.log_the_table("config" , info_table)
 

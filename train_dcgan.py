@@ -22,7 +22,7 @@ import custom_utils.logger as ut_log
 class train_config(ut_cfg.config):
     def __init__(self):
         super(train_config, self).__init__(saving_id = "dcgan_mnist_BCE",
-            pBs = 64, pWn = 2, p_force_cpu = False)
+            pBs = 64, pWn = 2, p_force_cpu = True)
 
         self.total_epoch = 100
         self.save_epoch_begin = 0

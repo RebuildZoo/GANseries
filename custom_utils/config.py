@@ -10,7 +10,8 @@ class config(object):
     def __init__(self, saving_id: str, pBs : int, pWn : int, p_force_cpu : bool):
         # device & its name
         self.saving_id = saving_id
-        self.device = self.select_device(p_force_cpu)
+        self.device_index = 0 # default
+        self.device, self.device_info = self.select_device(p_force_cpu)
         
         # path 
         self.checkpoints_root_path = None
@@ -21,38 +22,26 @@ class config(object):
         
 
     def select_device(self, force_cpu = False):
-        '''
-        auto-select the device, equals to: 
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-        if cuda_flag: try enable apex & cudnn.benchmark 
-        '''
         cuda_flag = False if force_cpu else torch.cuda.is_available()
-        device = torch.device('cuda:0' if cuda_flag else 'cpu')
+        device = torch.device('cuda:%d'%(self.device_index) if cuda_flag else 'cpu')
 
+        device_str = None
         if not cuda_flag:
-            print("[divice info] Using CPU")
-        else:
-            try:
-                from apex import amp
-                apex_str = 'with Apex '
-            except:
-                apex_str = ''
+            import platform 
+            device_str = "cpu" + "(name: %s)"%(platform.processor())
+            
+
+        else: 
             torch.cuda.empty_cache()
             torch.backends.cudnn.benchmark = True 
-            c = 1024 ** 2  # bytes to MB
-            ng = torch.cuda.device_count()
-            x = [torch.cuda.get_device_properties(i) for i in range(ng)]
-            cuda_str = 'Using CUDA ' + apex_str
-            for i in range(0, ng):
-                if i == 1:
-                    # torch.cuda.set_device(0)  # OPTIONAL: Set GPU ID
-                    cuda_str = ' ' * len(cuda_str)
-                print("[divice info]%sdevice%g _Properties(name='%s', total_memory=%dMB)" %
-                      (cuda_str, i, x[i].name, x[i].total_memory / c))
 
-        print('')  # skip a line
-        return device
+            c = 1024 ** 3  # bytes to MB
+
+            ng = torch.cuda.device_count()
+            device_prop = torch.cuda.get_device_properties(self.device_index)
+            device_str = "cuda" + f"(index: {self.device_index}/{ng}, name: {device_prop.name}, mem: {float(device_prop.total_memory/c)} G)" 
+
+        return device, device_str
 
     def check_path_valid(self, path) -> str:
         os.makedirs(path, exist_ok = True)
@@ -79,10 +68,18 @@ class config(object):
             ut_init.init_norm(pNet)
         elif init_mode == "preTrain":
             assert pretrain_path is not None, "weight path ungiven"
-            if ".weight" in self.path_weight_file:
-                pNet.load_darknet_weights(self.path_weight_file)
-            elif ".pth" in self.path_weight_file:
-                pNet.load_state_dict(torch.load(self.path_weight_file))
+            if ".weight" in pretrain_path:
+                pNet.load_darknet_weights(pretrain_path)
+            elif ".pth" in pretrain_path:
+                try : 
+                    pNet.load_state_dict(torch.load(pretrain_path))
+                except RuntimeError: 
+                    pre_state_Dic= torch.load(pretrain_path)
+                    temp_state_Dic = OrderedDict()
+                    for key_self, key_out in zip(pNet.state_dict(), pre_state_Dic.keys()):
+                        temp_state_Dic[key_self] = pre_state_Dic[key_out]
+                    pNet.load_state_dict(temp_state_Dic)
+
 
         pNet.to(self.device)
         if istrain : pNet.train()
@@ -94,6 +91,9 @@ class config(object):
         if tensor.is_cuda : 
             tensor = tensor.cpu()
         return tensor
+
+    def to_device(self, tensor):
+        return tensor.to(self.device)
 
 if __name__ == '__main__':
     train_para = config()
